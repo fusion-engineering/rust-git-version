@@ -1,0 +1,6 @@
+[package]
+name = "git-version"
+description = "Compile the git version (tag name, or hash otherwise) and dirty state into your program."
+version = "0.1.0"
+authors = ["Maurice Bos <m-ou.se@m-ou.se>"]
+license = "BSD-2-Clause"
