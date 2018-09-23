@@ -11,6 +11,9 @@
 //!
 //! The version number will have a `-modified` suffix if your git worktree had
 //! untracked or changed files.
+//!
+//! Does not depend on libgit, but simply uses the `git` binary directly.
+//! So you must have `git` installed somewhere in your `PATH`.
 
 use std::process::Command;
 
