@@ -1,7 +1,7 @@
 [package]
 name = "git-version"
 description = "Compile the git version (tag name, or hash otherwise) and dirty state into your program."
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Mara Bos <m-ou.se@m-ou.se>"]
 license = "BSD-2-Clause"
 repository = "https://github.com/m-ou-se/rust-git-version"
