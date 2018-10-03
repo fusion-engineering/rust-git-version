@@ -36,7 +36,7 @@ pub fn set_env() {
 /// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
 /// ```
 pub fn set_env_with_name(name: &str) {
-	let cmd = Command::new("git").args(&["describe", "--always", "--dirty=-modified"]).output().unwrap();
+	let cmd = Command::new("git").args(&["describe", "--always", "--tags", "--dirty=-modified"]).output().unwrap();
 	assert!(cmd.status.success());
 	let ver = std::str::from_utf8(&cmd.stdout[..]).unwrap().trim();
 	println!("cargo:rustc-env={}={}", name, ver);
