@@ -5,15 +5,27 @@
 //! fn main() { git_version::set_env(); }
 //! ```
 //!
+//! Which requires in the `Cargo.toml`:
+//! ```toml
+//! [build-dependencies]
+//! git-version = "*"
+//! ```
+//!
 //! Then you can use `env!("VERSION")` to get the version number in your code.
 //! The version number will be based on the relevant git tag (if any), and git
 //! commit hash if there is no exactly matching tag. See `git help describe`.
 //!
-//! The version number will have a `-modified` suffix if your git worktree had
-//! untracked or changed files.
+//! The version number will have a `-modified` suffix if your git working tree
+//! had untracked or changed files.
 //!
 //! Does not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
+//!
+//! # Builder
+//!
+//! This library also has a builder-pattern like constructor [GitVersion],
+//! which allows for fine-grain configuration of getting the version tag.
+//! [GitVersion] remaps most of the capability of `git describe`.
 
 use std::process::Command;
 use std::io::Result;
@@ -108,7 +120,7 @@ pub struct GitVersion {
 	unannotated_tags: bool,
 	
 	/// Reverse the order of searching tags.
-	contains_tags: bool,
+	contains: bool,
 	
 	/// Travers only the first parent at merge commits.
 	first_parent: bool,
@@ -118,6 +130,31 @@ pub struct GitVersion {
 }
 
 impl GitVersion {
+	/// Constructs a new `GitVersion` for setting an environmet variable to a
+	/// description of version of the enclosing git repository.
+	///
+	/// `new` initializes in accordance with the pseudo code:
+	/// ```
+	/// GitVersion::new()
+	///   .env_var_name("VERSION".to_string())
+	///   .dirty_suffix(Some("-modified".to_string()))
+	///   .broken_suffix(Some("-broken".to_string()))
+	///   .hash_length(0)
+	///   .candidates(10)
+	///   .format(GitVersionFormat::Fancy)
+	///   .unannotated_tags(true)
+	///   .contains(false)
+	///   .first_parent(false)
+	///   .all_refs(false)
+	/// ```
+	/// Hence, the default configuration would set the environment variable name
+	/// `VERSION`, adds the suffix `-modified` or `-broken` if the working tree
+	/// differs from HEAD or can not be evaluated, respectively,
+	/// uses the default hash length, candidate number and format,
+	/// takes non-annotated tags into account,
+	/// searches backwards (chronologically) for tags, uses default merge
+	/// traversal strategy and does not consider any other refs that tags.
+	///
 	pub fn new() -> Self {
 		GitVersion {
 			env_var_name: "VERSION".to_string(),
@@ -127,76 +164,150 @@ impl GitVersion {
 			candidates: 10,
 			format: GitVersionFormat::Fancy,
 			unannotated_tags: true,
-			contains_tags: false,
+			contains: false,
 			first_parent: false,
 			all_refs: false,
 		}
 	}
 	
+	/// Defines the name of the environment variable to be set.
+	///
+	/// The default is `VERSION`.
 	pub fn env_var_name(&mut self, name: String) -> &mut Self {
 		self.env_var_name = name;
 		
 		self
 	}
 	
+	/// Defines a version suffix if the working tree is dirty.
+	///
+	/// If `suffix` is set to `Some(str)`, `str` is appended to the git version,
+	/// when the working tree differs from HEAD.
+	/// If set to `None`, no suffix is generated for a dirty working tree.
 	pub fn dirty_suffix(&mut self, suffix: Option<String>) -> &mut Self {
 		self.dirty_suffix = suffix;
 		
 		self
 	}
 	
+	/// Defines a version suffix if the working tree is invalid.
+	///
+	/// If `suffix` is set to `Some(str)`, `str` is appended to the git version,
+	/// when the state of the working tree is invalid or otherwise
+	/// indeterminable.
+	///
+	/// `broken_suffix` implies `dirty_suffix`.
+	/// This mean if `dirty_suffix` is `None` while
+	/// `broken_suffix` is `Some(_)`,
+	/// then `dirty_suffix` is implicitly set to `Some("-dirty".to_string())`.
 	pub fn broken_suffix(&mut self, suffix: Option<String>) -> &mut Self {
 		self.broken_suffix = suffix;
 		
 		self
 	}
 	
+	/// Defines the number of characters in the commit hash, if any.
+	///
+	/// If `len` is `0`, the default hash length is used.
+	///
+	/// # Compatibility
+	///
+	/// `hash_length` resembles `git describe`s `--abbrev`,
+	/// but `--abbrev` has a special meaning if set to `0`,
+	/// that causes to omit the (trailing) hash.
+	/// This special behaviour is recreated with `format` in this crate,
+	/// which avoids this spacial meaning when setting the hash length to `0`.
+	/// Instead, if `len` is `0`, the default length of git for hashes is used.
+	///
 	pub fn hash_length(&mut self, len: usize) -> &mut Self {
 		self.hash_length = len;
 		
 		self
 	}
 	
+	/// Defines the number of tags to consider when searching for a tag to
+	/// describe HEAD.
+	///
+	/// If `number` is `0`, HEAD must point to a commit, which is directly
+	/// tagged.
+	/// This could be useful when using
+	/// [`try_set_env`][GitVersion::try_set_env()],
+	/// which returns `Err(_)` if `number` is `0` and HEAD is not tagged.
+	/// This could be further used to implement spacial handling in `build.rs`.
+	///
 	pub fn candidates(&mut self, number: usize) -> &mut Self {
 		self.candidates = number;
 		
 		self
 	}
 	
+	/// Defines the output format of the description.
 	pub fn format(&mut self, fmt: GitVersionFormat) -> &mut Self {
 		self.format = fmt;
 		
 		self
 	}
 	
+	/// Defines whether to include non-annotated tags.
 	pub fn unannotated_tags(&mut self, val: bool) -> &mut Self {
 		self.unannotated_tags = val;
 		
 		self
 	}
 	
-	pub fn contains_tags(&mut self, val: bool) -> &mut Self {
-		self.contains_tags = val;
+	/// Defines whether to reverse the order of searching tags.
+	///
+	/// The default (`val == false`) is to search the history for chronological
+	/// preceding tags.
+	/// This means if HEAD points to an arbitrary commit, it is described by
+	/// a preceding tag.
+	///
+	/// If `val` is `true`, the history is search for chronological succeeding
+	/// tags. This is essentially useful in combination with
+	/// [`all_refs`][GitVersion::all_refs()], where branches are also taken in
+	/// account. In this case the ref (e.g., branch) _containing_ the
+	/// HEAD is used to describe it.
+	pub fn contains(&mut self, val: bool) -> &mut Self {
+		self.contains = val;
 		
 		self
 	}
 	
+	/// Defines whether to traverse only the first parent of merge commits.
 	pub fn first_parent(&mut self, val: bool) -> &mut Self {
 		self.first_parent = val;
 		
 		self
 	}
 	
+	/// Defines whether to include all kinds of reference or only tags to
+	/// describe a git version.
 	pub fn all_refs(&mut self, val: bool) -> &mut Self {
 		self.all_refs = val;
 		
 		self
 	}
 	
+	/// Use the configuration of `self` to get the git version and set the environment
+	/// variable falling back to `"undetermined"` on error.
+	///
+	/// For more details see
+	/// [`set_env_with_default`][GitVersion::set_env_with_default()].
 	pub fn set_env(&self) {
 		self.set_env_with_default("undetermined");
 	}
 	
+	/// Use the configuration of `self` to get the git version and set the environment
+	/// variable falling back to `default_tag` on error.
+	///
+	/// `set_env_with_default` retrieves the git version using the configuration
+	/// defined in `self` and instructs cargo to set the configured environment
+	/// variable to the result.
+	/// If an error occurred during the determination of the git
+	/// version, the environment variable is set to `default_tag` instead.
+	///
+	/// For further information see
+	/// [`try_set_env`][GitVersion::try_set_env()].
 	pub fn set_env_with_default(&self, default_tag: &str) {
 		if let Err(e) = self.try_set_env() {
 			// Catch general error
@@ -212,7 +323,19 @@ impl GitVersion {
 	
 	/// Try to set the environment variable.
 	///
+	/// `try_set_env` tries to retrieve the git version using the configuration
+	/// defined in `self` and instructs cargo to set the configured environment
+	/// variable to the result.
+	/// If an error occurred during the determination of the git version,
+	/// an appropriate `Err(_)` is returned and no instructions are passed to
+	/// cargo.
 	///
+	/// This method is intended to be used to do special handling in the
+	/// `build.rs` or at runtime, since no environment variable is set on error.
+	/// If it is desirable that the environment variable is set anyway,
+	/// than [`set_env`][GitVersion::set_env()] or
+	/// [`set_env_with_default`][GitVersion::set_env_with_default()]
+	/// are more useful.
 	pub fn try_set_env(&self) -> Result<()> {
 		// Notice: the combination of --abbrev=0 and --long is illegal
 		
@@ -248,7 +371,7 @@ impl GitVersion {
 		if self.unannotated_tags {
 			cmd.arg("--tags");
 		}
-		if self.contains_tags {
+		if self.contains {
 			cmd.arg("--contains");
 		}
 		if self.first_parent {
