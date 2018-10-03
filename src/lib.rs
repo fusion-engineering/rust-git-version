@@ -18,7 +18,7 @@
 use std::process::Command;
 
 /// Instruct cargo to set the VERSION environment variable to the version as
-/// indicated by `git describe --always --dirty=-modified`.
+/// indicated by `git describe --tags --always --dirty=-modified`.
 ///
 /// Also instructs cargo to *always* re-run the build script and recompile the
 /// code, to make sure the version number is always correct.
@@ -36,9 +36,35 @@ pub fn set_env() {
 /// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
 /// ```
 pub fn set_env_with_name(name: &str) {
-	let cmd = Command::new("git").args(&["describe", "--always", "--tags", "--dirty=-modified"]).output().unwrap();
-	assert!(cmd.status.success());
-	let ver = std::str::from_utf8(&cmd.stdout[..]).unwrap().trim();
+	if let Err(e) = try_set_env_with_name(name) {
+		// Catch general error
+		eprintln!("[git-version] Error: {}", e);
+		
+		println!("cargo:rustc-env={}={}", name, "undetermined");
+		println!("cargo:rerun-if-changed=(nonexistentfile)");
+	}
+}
+
+/// Same as `set_env_with_name`, but with explicit feedback about success and
+/// failure.
+///
+/// If Err is returned, no environment variable is created.
+/// If Ok is returned, cargo is instructed to set the environment variable
+/// named `name` to is set to the version as
+/// indicated by `git describe --tags --always --dirty=-modified`.
+///
+pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
+	let cmd = Command::new("git").args(
+		&["describe", "--always", "--tags", "--dirty=-modified"]).output()?;
+	
+	if !cmd.status.success() {
+		return Err(std::io::Error::new(std::io::ErrorKind::Other,"Error"));
+	}
+	
+	let ver = String::from_utf8_lossy(&cmd.stdout);
+	
 	println!("cargo:rustc-env={}={}", name, ver);
 	println!("cargo:rerun-if-changed=(nonexistentfile)");
+	
+	Ok(())
 }
