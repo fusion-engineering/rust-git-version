@@ -57,35 +57,80 @@ pub fn try_set_env_with_name(name: &str) -> Result<()> {
 		.try_set_env()
 }
 
+/// Represents the three different formats of a git version.
+///
+#[derive(Copy,Clone,Debug,PartialEq,Eq,Hash)]
+pub enum GitVersionFormat {
+	/// Take only the tag string of the closest git tag omitting the
+	/// commit hash.
+	TagOnly,
+	
+	/// The default output format of `git describe`,
+	/// which takes only the tag if the commit of `HEAD` is directly tagged
+	/// or the `Long` format otherwise.
+	Fancy,
+	
+	/// Uses always the long format:
+	/// ```
+	/// format!("{}-{}-g{}", tag_name, commits_ahead, commit_hash)
+	/// ```
+	Long,
+}
 
-/// Notice: the combination of hash_length == 0 and long_format == true is illegal
+
+/// A git version builder, providing fine-grain control over the resulting
+/// version name.
+///
+/// A minimal usage version is `GitVersion::new().set_env()`
+///
+#[derive(Clone,Debug)]
 pub struct GitVersion {
-	hash_length: Option<usize>,
-	dirty_suffix: Option<String>,
-	broken_suffix: Option<String>,
+	/// The name of the environment variable to be set.
 	env_var_name: String,
-	long_format: bool,
+	
+	/// If Some, add the given suffix when the working tree differs from HEAD.
+	dirty_suffix: Option<String>,
+	
+	/// If Some, add the given suffix when the state of the working tree is
+	/// indeterminable.
+	broken_suffix: Option<String>,
+	
+	/// The number of characters in the hash.
+	hash_length: usize,
+	
+	/// The number of tags to consider when searching for a tag
+	candidates: usize,
+	
+	/// The output format of the description.
+	format: GitVersionFormat,
+	
+	/// Include non-annotated tags
 	unannotated_tags: bool,
+	
+	/// Reverse the order of searching tags.
 	contains_tags: bool,
+	
+	/// Travers only the first parent at merge commits.
+	first_parent: bool,
+	
+	/// Allow all kinds of reference as tag
+	all_refs: bool,
 }
 
 impl GitVersion {
 	pub fn new() -> Self {
 		GitVersion {
-			hash_length: None,
-			dirty_suffix: Some("-modified".to_string()),
-			broken_suffix: None,
 			env_var_name: "VERSION".to_string(),
-			long_format: false,
+			dirty_suffix: Some("-modified".to_string()),
+			broken_suffix: Some("-broken".to_string()),
+			hash_length: 0,
+			candidates: 10,
+			format: GitVersionFormat::Fancy,
 			unannotated_tags: true,
 			contains_tags: false,
+			first_parent: false,
+			all_refs: false,
 		}
-	}
-	
-	pub fn hash_length(&mut self, len: Option<usize>) -> &mut Self {
-		self.hash_length = len;
-		
-		self
 	}
 	
 	pub fn env_var_name(&mut self, name: String) -> &mut Self {
@@ -94,7 +139,59 @@ impl GitVersion {
 		self
 	}
 	
-	// TODO add further confs
+	pub fn dirty_suffix(&mut self, suffix: Option<String>) -> &mut Self {
+		self.dirty_suffix = suffix;
+		
+		self
+	}
+	
+	pub fn broken_suffix(&mut self, suffix: Option<String>) -> &mut Self {
+		self.broken_suffix = suffix;
+		
+		self
+	}
+	
+	pub fn hash_length(&mut self, len: usize) -> &mut Self {
+		self.hash_length = len;
+		
+		self
+	}
+	
+	pub fn candidates(&mut self, number: usize) -> &mut Self {
+		self.candidates = number;
+		
+		self
+	}
+	
+	pub fn format(&mut self, fmt: GitVersionFormat) -> &mut Self {
+		self.format = fmt;
+		
+		self
+	}
+	
+	pub fn unannotated_tags(&mut self, val: bool) -> &mut Self {
+		self.unannotated_tags = val;
+		
+		self
+	}
+	
+	pub fn contains_tags(&mut self, val: bool) -> &mut Self {
+		self.contains_tags = val;
+		
+		self
+	}
+	
+	pub fn first_parent(&mut self, val: bool) -> &mut Self {
+		self.first_parent = val;
+		
+		self
+	}
+	
+	pub fn all_refs(&mut self, val: bool) -> &mut Self {
+		self.all_refs = val;
+		
+		self
+	}
 	
 	pub fn set_env(&self) {
 		self.set_env_with_default("undetermined");
@@ -103,6 +200,8 @@ impl GitVersion {
 	pub fn set_env_with_default(&self, default_tag: &str) {
 		if let Err(e) = self.try_set_env() {
 			// Catch general error
+			// This error message can be displayed e.g. with:
+			// cargo build -vv 2>&1 | grep -A4 "\\[git-version\\]"
 			eprintln!("[git-version] Error: {}", e);
 			
 			println!("cargo:rustc-env={}={}", self.env_var_name, default_tag);
@@ -110,46 +209,74 @@ impl GitVersion {
 		}
 	}
 	
-	///
+	
 	/// Try to set the environment variable.
-	///
-	/// # Panic
-	///
-	/// This function panics if `hash_length(Some(0))` and `long_format(true)` have
-	/// been both specified.
-	/// This is because `git` rejects this specific combination:
-	/// ```
-	/// fatal: --long is incompatible with --abbrev=0
-	/// ```
-	/// Consequently, this combination of option values must never be configured
-	/// in the first place and is considered a programming error.
-	///
-	/// Notice, that this panic would render your project unable to been build.
 	///
 	///
 	pub fn try_set_env(&self) -> Result<()> {
-		// Notice a violation of this assertion is an programmatic error,
-		// which shall be indicated by a panic, to be fixed by the programmer.
-		// Otherwise, `git` would fail and potentially it would be handled
-		// silently by the 'undetermined' tag.
-		assert!(!(self.hash_length == Some(0) && self.long_format));
+		// Notice: the combination of --abbrev=0 and --long is illegal
 		
-		// TODO implement using the config of self
-		let cmd = Command::new("git").args(
-		&["describe", "--always", "--tags", "--dirty=-modified"]).output()?;
+		// Construct base command
+		let mut cmd = Command::new("git");
+		cmd.args(&[
+			"describe",
+			"--always",
+			&format!("--candidates={}", self.candidates)
+		]);
 		
-		if !cmd.status.success() {
+		// Add suffixes
+		if let Some(ref suffix) = self.dirty_suffix {
+			cmd.arg(&format!("--dirty={}", suffix));
+		}
+		if let Some(ref suffix) = self.broken_suffix {
+			cmd.arg(&format!("--broken={}", suffix));
+		}
+		
+		// Set format
+		if self.format == GitVersionFormat::TagOnly {
+			cmd.arg("--abbrev=0");
+		} else if self.hash_length > 0 {
+			cmd.arg(&format!("--abbrev={}", self.hash_length));
+		}
+		if self.format == GitVersionFormat::Long {
+			cmd.arg("--long");
+		}
+		// Notice: self.format == GitVersionFormat::Fancy
+		// is default behaviour and doesn't need handling
+		
+		// Set flags
+		if self.unannotated_tags {
+			cmd.arg("--tags");
+		}
+		if self.contains_tags {
+			cmd.arg("--contains");
+		}
+		if self.first_parent {
+			cmd.arg("--first-parent");
+		}
+		if self.all_refs {
+			cmd.arg("--all");
+		}
+		
+		// Start process and gather the stdout/stderr
+		let cmd_res = cmd.output()?;
+		
+		// Check status code
+		if !cmd_res.status.success() {
 			return Err(std::io::Error::new(
 				std::io::ErrorKind::Other,
-				format!("Git failed to describe HEAD, return code: {:?}\n{}",
-					cmd.status.code(),
-					String::from_utf8_lossy(&cmd.stderr)
+				format!("Git failed to describe the working tree, return code: {:?}\n{}",
+					cmd_res.status.code(),
+					String::from_utf8_lossy(&cmd_res.stderr)
 				)
 			));
 		}
 		
-		let ver = String::from_utf8_lossy(&cmd.stdout);
+		// Convert the stdout of the process into UTF-8, non-UTF-8 bytes become
+		// the `�` symbole
+		let ver = String::from_utf8_lossy(&cmd_res.stdout);
 		
+		// Output the instructions for cargo to set the environment variable
 		println!("cargo:rustc-env={}={}", self.env_var_name, ver);
 		println!("cargo:rerun-if-changed=(nonexistentfile)");
 		
