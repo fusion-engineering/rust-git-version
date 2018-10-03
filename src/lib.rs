@@ -58,7 +58,13 @@ pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
 		&["describe", "--always", "--tags", "--dirty=-modified"]).output()?;
 	
 	if !cmd.status.success() {
-		return Err(std::io::Error::new(std::io::ErrorKind::Other,"Error"));
+		return Err(std::io::Error::new(
+			std::io::ErrorKind::Other,
+			format!("Git failed to describe HEAD, return code: {:?}\n{}",
+				cmd.status.code(),
+				String::from_utf8_lossy(&cmd.stderr)
+			)
+		));
 	}
 	
 	let ver = String::from_utf8_lossy(&cmd.stdout);
