@@ -92,7 +92,7 @@ pub enum GitVersionFormat {
 	Fancy,
 	
 	/// Uses always the long format:
-	/// ```
+	/// ```ignore
 	/// format!("{}-{}-g{}", tag_name, commits_ahead, commit_hash)
 	/// ```
 	///
@@ -107,7 +107,7 @@ pub enum GitVersionFormat {
 ///
 /// A minimal usage version is `GitVersion::new().set_env()`
 ///
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Hash,PartialEq,Eq)]
 pub struct GitVersion {
 	/// The name of the environment variable to be set.
 	env_var_name: String,
@@ -148,8 +148,11 @@ impl GitVersion {
 	/// `new` returns an initialized `GitVersion`.
 	/// The initialization has the same effect as the following pseudo code:
 	/// ```
-	/// let gv: GitVersion;
-	/// ...
+	/// # use git_version::GitVersion;
+	/// # use git_version::GitVersionFormat;
+	/// let mut gv: GitVersion;
+	/// // ...
+	/// # gv = GitVersion::new();
 	/// gv.env_var_name("VERSION".to_string())
 	///   .dirty_suffix(Some("-modified".to_string()))
 	///   .broken_suffix(Some("-broken".to_string()))
@@ -160,6 +163,7 @@ impl GitVersion {
 	///   .contains(false)
 	///   .first_parent(false)
 	///   .all_refs(false)
+	/// # ;assert_eq!(gv, GitVersion::new());
 	/// ```
 	/// Hence, the default configuration would set the environment variable name
 	/// `VERSION`, adds the suffix `-modified` or `-broken` if the working tree
@@ -232,7 +236,7 @@ impl GitVersion {
 	/// If `len` is `0`, the default hash length is used.
 	///
 	/// `hash_length` is analogous to the `--abbrev` option of `git describe`,
-	/// but differs in special cases, see next [section][#Compatibility].
+	/// but differs in special cases, see next section.
 	///
 	/// # Compatibility
 	///
@@ -261,7 +265,7 @@ impl GitVersion {
 	/// This could be useful when using
 	/// [`try_set_env`][GitVersion::try_set_env()],
 	/// which returns `Err(_)` if `number` is `0` and HEAD is not tagged.
-	/// This could be further used to implement spacial handling in `build.rs`.
+	/// This could be further used to implement special handling in `build.rs`.
 	///
 	/// `candidates` is analogous to the `--candidates` option of
 	/// `git describe`.
