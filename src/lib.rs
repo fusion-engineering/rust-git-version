@@ -58,8 +58,8 @@ pub fn set_env_with_name(name: &str) {
 /// Same as `set_env_with_name`, but with explicit feedback about success and
 /// failure.
 ///
-/// If Err is returned, no environment variable is created.
-/// If Ok is returned, cargo is instructed to set the environment variable
+/// If `Err` is returned, no environment variable is created.
+/// If `Ok` is returned, cargo is instructed to set the environment variable
 /// named `name` to is set to the version as
 /// indicated by `git describe --tags --always --dirty=-modified`.
 ///
@@ -71,21 +71,33 @@ pub fn try_set_env_with_name(name: &str) -> Result<()> {
 
 /// Represents the three different formats of a git version.
 ///
+/// If the enclosing repository does not have an appropriated tag,
+/// the specified format is ignored and only the commit hash is outputted.
 #[derive(Copy,Clone,Debug,PartialEq,Eq,Hash)]
 pub enum GitVersionFormat {
 	/// Take only the tag string of the closest git tag omitting the
 	/// commit hash.
+	///
+	/// `TagOnly` is implemented with the special meaning of `--abbrev=0` option
+	/// of `git describe`.
+	///
 	TagOnly,
 	
 	/// The default output format of `git describe`,
 	/// which takes only the tag if the commit of `HEAD` is directly tagged
 	/// or the `Long` format otherwise.
+	///
+	/// `Fancy` is the default format of `git describe`.
+	///
 	Fancy,
 	
 	/// Uses always the long format:
 	/// ```
 	/// format!("{}-{}-g{}", tag_name, commits_ahead, commit_hash)
 	/// ```
+	///
+	/// `Long` is analogous to the `--long` option of `git describe`.
+	///
 	Long,
 }
 
@@ -117,7 +129,7 @@ pub struct GitVersion {
 	format: GitVersionFormat,
 	
 	/// Include non-annotated tags
-	unannotated_tags: bool,
+	lightweight_tags: bool,
 	
 	/// Reverse the order of searching tags.
 	contains: bool,
@@ -133,16 +145,18 @@ impl GitVersion {
 	/// Constructs a new `GitVersion` for setting an environmet variable to a
 	/// description of version of the enclosing git repository.
 	///
-	/// `new` initializes in accordance with the pseudo code:
+	/// `new` returns an initialized `GitVersion`.
+	/// The initialization has the same effect as the following pseudo code:
 	/// ```
-	/// GitVersion::new()
-	///   .env_var_name("VERSION".to_string())
+	/// let gv: GitVersion;
+	/// ...
+	/// gv.env_var_name("VERSION".to_string())
 	///   .dirty_suffix(Some("-modified".to_string()))
 	///   .broken_suffix(Some("-broken".to_string()))
 	///   .hash_length(0)
 	///   .candidates(10)
 	///   .format(GitVersionFormat::Fancy)
-	///   .unannotated_tags(true)
+	///   .lightweight_tags(true)
 	///   .contains(false)
 	///   .first_parent(false)
 	///   .all_refs(false)
@@ -163,7 +177,7 @@ impl GitVersion {
 			hash_length: 0,
 			candidates: 10,
 			format: GitVersionFormat::Fancy,
-			unannotated_tags: true,
+			lightweight_tags: true,
 			contains: false,
 			first_parent: false,
 			all_refs: false,
@@ -172,7 +186,8 @@ impl GitVersion {
 	
 	/// Defines the name of the environment variable to be set.
 	///
-	/// The default is `VERSION`.
+	/// The default is `"VERSION"`.
+	///
 	pub fn env_var_name(&mut self, name: String) -> &mut Self {
 		self.env_var_name = name;
 		
@@ -184,6 +199,9 @@ impl GitVersion {
 	/// If `suffix` is set to `Some(str)`, `str` is appended to the git version,
 	/// when the working tree differs from HEAD.
 	/// If set to `None`, no suffix is generated for a dirty working tree.
+	///
+	/// `dirty_suffix` is analogous to the `--dirty` option of `git describe`.
+	///
 	pub fn dirty_suffix(&mut self, suffix: Option<String>) -> &mut Self {
 		self.dirty_suffix = suffix;
 		
@@ -200,6 +218,9 @@ impl GitVersion {
 	/// This mean if `dirty_suffix` is `None` while
 	/// `broken_suffix` is `Some(_)`,
 	/// then `dirty_suffix` is implicitly set to `Some("-dirty".to_string())`.
+	///
+	/// `broken_suffix` is analogous to the `--broken` option of `git describe`.
+	///
 	pub fn broken_suffix(&mut self, suffix: Option<String>) -> &mut Self {
 		self.broken_suffix = suffix;
 		
@@ -210,14 +231,21 @@ impl GitVersion {
 	///
 	/// If `len` is `0`, the default hash length is used.
 	///
+	/// `hash_length` is analogous to the `--abbrev` option of `git describe`,
+	/// but differs in special cases, see next [section][#Compatibility].
+	///
 	/// # Compatibility
 	///
-	/// `hash_length` resembles `git describe`s `--abbrev`,
+	/// `hash_length` is analogous to `git describe --abbrev`,
 	/// but `--abbrev` has a special meaning if set to `0`,
-	/// that causes to omit the (trailing) hash.
-	/// This special behaviour is recreated with `format` in this crate,
-	/// which avoids this spacial meaning when setting the hash length to `0`.
-	/// Instead, if `len` is `0`, the default length of git for hashes is used.
+	/// that causes to omit the trailing commit hash.
+	/// This special behavior is recreated in this crate with
+	/// [`format`][GitVersion::format()] (see [GitVersionFormat]),
+	/// which maps this behavior explicitly
+	/// ([`TagOnly`][GitVersionFormat::TagOnly]) using
+	/// `git describe --abbrev=0`.
+	/// Instead, if `hash_length` is set to `0`,
+	/// the default length of commit hashes is used.
 	///
 	pub fn hash_length(&mut self, len: usize) -> &mut Self {
 		self.hash_length = len;
@@ -235,6 +263,9 @@ impl GitVersion {
 	/// which returns `Err(_)` if `number` is `0` and HEAD is not tagged.
 	/// This could be further used to implement spacial handling in `build.rs`.
 	///
+	/// `candidates` is analogous to the `--candidates` option of
+	/// `git describe`.
+	///
 	pub fn candidates(&mut self, number: usize) -> &mut Self {
 		self.candidates = number;
 		
@@ -242,6 +273,10 @@ impl GitVersion {
 	}
 	
 	/// Defines the output format of the description.
+	///
+	/// `format` is realized either with the `--abbrev=0` option,
+	/// the `--long` option or non option (default behavior) of `git describe`.
+	///
 	pub fn format(&mut self, fmt: GitVersionFormat) -> &mut Self {
 		self.format = fmt;
 		
@@ -249,8 +284,12 @@ impl GitVersion {
 	}
 	
 	/// Defines whether to include non-annotated tags.
-	pub fn unannotated_tags(&mut self, val: bool) -> &mut Self {
-		self.unannotated_tags = val;
+	///
+	/// `lightweight_tags` is analogous to the `--tags` option of
+	/// `git describe`.
+	///
+	pub fn lightweight_tags(&mut self, val: bool) -> &mut Self {
+		self.lightweight_tags = val;
 		
 		self
 	}
@@ -267,6 +306,9 @@ impl GitVersion {
 	/// [`all_refs`][GitVersion::all_refs()], where branches are also taken in
 	/// account. In this case the ref (e.g., branch) _containing_ the
 	/// HEAD is used to describe it.
+	///
+	/// `contains` is analogous to the `--contains` option of `git describe`.
+	///
 	pub fn contains(&mut self, val: bool) -> &mut Self {
 		self.contains = val;
 		
@@ -274,6 +316,10 @@ impl GitVersion {
 	}
 	
 	/// Defines whether to traverse only the first parent of merge commits.
+	///
+	/// `first_parent` is analogous to the `--first-parent` option of
+	/// `git describe`.
+	///
 	pub fn first_parent(&mut self, val: bool) -> &mut Self {
 		self.first_parent = val;
 		
@@ -282,6 +328,9 @@ impl GitVersion {
 	
 	/// Defines whether to include all kinds of reference or only tags to
 	/// describe a git version.
+	///
+	/// `all_refs` is analogous to the `--all` option of `git describe`.
+	///
 	pub fn all_refs(&mut self, val: bool) -> &mut Self {
 		self.all_refs = val;
 		
@@ -293,6 +342,7 @@ impl GitVersion {
 	///
 	/// For more details see
 	/// [`set_env_with_default`][GitVersion::set_env_with_default()].
+	///
 	pub fn set_env(&self) {
 		self.set_env_with_default("undetermined");
 	}
@@ -308,6 +358,7 @@ impl GitVersion {
 	///
 	/// For further information see
 	/// [`try_set_env`][GitVersion::try_set_env()].
+	///
 	pub fn set_env_with_default(&self, default_tag: &str) {
 		if let Err(e) = self.try_set_env() {
 			// Catch general error
@@ -336,6 +387,7 @@ impl GitVersion {
 	/// than [`set_env`][GitVersion::set_env()] or
 	/// [`set_env_with_default`][GitVersion::set_env_with_default()]
 	/// are more useful.
+	///
 	pub fn try_set_env(&self) -> Result<()> {
 		// Notice: the combination of --abbrev=0 and --long is illegal
 		
@@ -368,7 +420,7 @@ impl GitVersion {
 		// is default behaviour and doesn't need handling
 		
 		// Set flags
-		if self.unannotated_tags {
+		if self.lightweight_tags {
 			cmd.arg("--tags");
 		}
 		if self.contains {
