@@ -31,7 +31,7 @@ use std::process::Command;
 use std::io::Result;
 
 /// Instruct cargo to set the VERSION environment variable to the version as
-/// indicated by `git describe --tags --always --dirty=-modified`.
+/// indicated by `git describe --always --dirty=-modified`.
 ///
 /// Also instructs cargo to *always* re-run the build script and recompile the
 /// code, to make sure the version number is always correct.
@@ -61,7 +61,7 @@ pub fn set_env_with_name(name: &str) {
 /// If `Err` is returned, no environment variable is created.
 /// If `Ok` is returned, cargo is instructed to set the environment variable
 /// named `name` to is set to the version as
-/// indicated by `git describe --tags --always --dirty=-modified`.
+/// indicated by `git describe --always --dirty=-modified`.
 ///
 pub fn try_set_env_with_name(name: &str) -> Result<()> {
 	GitVersion::new()
@@ -159,7 +159,7 @@ impl GitVersion {
 	///   .hash_length(0)
 	///   .candidates(10)
 	///   .format(GitVersionFormat::Fancy)
-	///   .lightweight_tags(true)
+	///   .lightweight_tags(false)
 	///   .contains(false)
 	///   .first_parent(false)
 	///   .all_refs(false)
@@ -169,9 +169,9 @@ impl GitVersion {
 	/// `VERSION`, adds the suffix `-modified` or `-broken` if the working tree
 	/// differs from HEAD or can not be evaluated, respectively,
 	/// uses the default hash length, candidate number and format,
-	/// takes non-annotated tags into account,
 	/// searches backwards (chronologically) for tags, uses default merge
-	/// traversal strategy and does not consider any other refs that tags.
+	/// traversal strategy and does not consider any other refs than
+	/// annotated tags.
 	///
 	pub fn new() -> Self {
 		GitVersion {
@@ -181,7 +181,7 @@ impl GitVersion {
 			hash_length: 0,
 			candidates: 10,
 			format: GitVersionFormat::Fancy,
-			lightweight_tags: true,
+			lightweight_tags: false,
 			contains: false,
 			first_parent: false,
 			all_refs: false,
