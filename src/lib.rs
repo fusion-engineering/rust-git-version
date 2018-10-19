@@ -18,7 +18,7 @@
 use std::process::Command;
 
 /// Instruct cargo to set the VERSION environment variable to the version as
-/// indicated by `git describe --tags --always --dirty=-modified`.
+/// indicated by `git describe --always --dirty=-modified`.
 ///
 /// Also instructs cargo to *always* re-run the build script and recompile the
 /// code, to make sure the version number is always correct.
@@ -51,11 +51,11 @@ pub fn set_env_with_name(name: &str) {
 /// If Err is returned, no environment variable is created.
 /// If Ok is returned, cargo is instructed to set the environment variable
 /// named `name` to is set to the version as
-/// indicated by `git describe --tags --always --dirty=-modified`.
+/// indicated by `git describe --always --dirty=-modified`.
 ///
 pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
 	let cmd = Command::new("git").args(
-		&["describe", "--always", "--tags", "--dirty=-modified"]).output()?;
+		&["describe", "--always", "--dirty=-modified"]).output()?;
 	
 	if !cmd.status.success() {
 		return Err(std::io::Error::new(
