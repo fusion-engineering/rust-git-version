@@ -26,7 +26,7 @@
 //! which allows for fine-grain configuration of getting the version tag.
 //! [GitVersion] remaps most of the capability of `git describe`.
 
-use std::process::Command;
+use std::process::{exit, Command, Stdio};
 use std::io::Result;
 
 /// Instruct cargo to set the VERSION environment variable to the version as
@@ -35,9 +35,7 @@ use std::io::Result;
 /// Also instructs cargo to *always* re-run the build script and recompile the
 /// code, to make sure the version number is always correct.
 ///
-/// # Panics
-///
-/// This function will panic if an error occurs during repository inspection.
+/// On error, this function will terminate the process with non-zero exit code.
 /// For details see [`GitVersion::set_env()`][GitVersion::set_env()].
 ///
 pub fn set_env() {
@@ -45,7 +43,8 @@ pub fn set_env() {
 		.set_env()
 }
 
-/// Same as `set_env`, but using `name` as environment variable.
+/// Same as `set_env`, but using `name` as the name for the environment
+/// variable.
 ///
 /// You can, for example, override the `CARGO_PKG_VERSION` using in
 /// your `build.rs` script:
@@ -54,9 +53,7 @@ pub fn set_env() {
 /// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
 /// ```
 ///
-/// # Panics
-///
-/// This function will panic if an error occurs during repository inspection.
+/// On error, this function will terminate the process with non-zero exit code.
 /// For details see [`GitVersion::set_env()`][GitVersion::set_env()].
 ///
 pub fn set_env_with_name(name: &str) {
@@ -70,9 +67,8 @@ pub fn set_env_with_name(name: &str) {
 ///
 /// If `Err` is returned, no environment variable is created.
 /// If `Ok` is returned, cargo is instructed to set the environment variable
-/// named `name` to is set to the version as
-/// indicated by `git describe --always --dirty=-modified`.
-///
+/// named `name` to is set to the version as indicated by
+/// `git describe --always --dirty=-modified`.
 pub fn try_set_env_with_name(name: &str) -> Result<()> {
 	GitVersion::new()
 		.env_var_name(name.to_string())
@@ -357,13 +353,13 @@ impl GitVersion {
 	/// For more details see
 	/// [`try_set_env`][GitVersion::try_set_env()].
 	///
-	/// # Panics
-	///
-	/// This function will panic if `try_set_env` returns an error.
+	/// If `try_set_env` returns an error, this function will terminate the
+	/// current process with non-zero exit code.
 	///
 	pub fn set_env(&self) {
 		if let Err(e) = self.try_set_env() {
-			panic!("[git-version] Error: {}", e);
+			eprintln!("[git-version] Error: {}", e);
+			exit(1);
 		}
 	}
 	
@@ -404,9 +400,8 @@ impl GitVersion {
 	/// This method is intended to be used to do special handling in the
 	/// `build.rs` or at runtime, since no environment variable is set on error.
 	/// If it is desirable that the environment variable is set anyway,
-	/// than [`set_env`][GitVersion::set_env()] or
-	/// [`set_env_with_default`][GitVersion::set_env_with_default()]
-	/// are more useful.
+	/// then [`set_env_with_default`][GitVersion::set_env_with_default()]
+	/// might be more useful.
 	///
 	pub fn try_set_env(&self) -> Result<()> {
 		// Notice: the combination of --abbrev=0 and --long is illegal
@@ -454,15 +449,16 @@ impl GitVersion {
 		}
 		
 		// Start process and gather the stdout/stderr
-		let cmd_res = cmd.output()?;
+		let cmd_res = cmd
+			.stderr(Stdio::inherit())
+			.output()?;
 		
 		// Check status code
 		if !cmd_res.status.success() {
 			return Err(std::io::Error::new(
 				std::io::ErrorKind::Other,
-				format!("Git failed to describe the working tree, return code: {:?}\n{}",
-					cmd_res.status.code(),
-					String::from_utf8_lossy(&cmd_res.stderr)
+				format!("`git describe' failed: {}",
+					cmd_res.status
 				)
 			));
 		}
