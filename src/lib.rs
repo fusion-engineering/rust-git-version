@@ -25,7 +25,8 @@ pub fn set_env() {
 	set_env_with_name("VERSION");
 }
 
-/// Same as `set_env`, but using `name` as environment variable.
+/// Same as `set_env`, but using `name` as the name for the environment
+/// variable.
 ///
 /// You can, for example, override the `CARGO_PKG_VERSION` using in
 /// your `build.rs` script:
@@ -43,11 +44,10 @@ pub fn set_env_with_name(name: &str) {
 /// Same as `set_env_with_name`, but with explicit feedback about success and
 /// failure.
 ///
-/// If Err is returned, no environment variable is created.
-/// If Ok is returned, cargo is instructed to set the environment variable
-/// named `name` to is set to the version as
-/// indicated by `git describe --always --dirty=-modified`.
-///
+/// If `Err` is returned, no environment variable is created.
+/// If `Ok` is returned, cargo is instructed to set the environment variable
+/// named `name` to is set to the version as indicated by
+/// `git describe --always --dirty=-modified`.
 pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
 	let cmd = Command::new("git")
 		.args(&["describe", "--always", "--dirty=-modified"])
