@@ -14,7 +14,7 @@
 //! Does not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use std::process::{exit, Stdio, Command};
+use std::process::{exit, Command, Stdio};
 
 /// Instruct cargo to set the VERSION environment variable to the version as
 /// indicated by `git describe --always --dirty=-modified`.
