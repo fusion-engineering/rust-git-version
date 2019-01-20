@@ -48,23 +48,25 @@ pub fn set_env_with_name(name: &str) {
 /// indicated by `git describe --always --dirty=-modified`.
 ///
 pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
-	let cmd = Command::new("git").args(
-		&["describe", "--always", "--dirty=-modified"]).output()?;
-	
+	let cmd = Command::new("git")
+		.args(&["describe", "--always", "--dirty=-modified"])
+		.output()?;
+
 	if !cmd.status.success() {
 		return Err(std::io::Error::new(
 			std::io::ErrorKind::Other,
-			format!("Git failed to describe HEAD, return code: {:?}\n{}",
+			format!(
+				"Git failed to describe HEAD, return code: {:?}\n{}",
 				cmd.status.code(),
 				String::from_utf8_lossy(&cmd.stderr)
-			)
+			),
 		));
 	}
-	
+
 	let ver = String::from_utf8_lossy(&cmd.stdout);
-	
+
 	println!("cargo:rustc-env={}={}", name, ver);
 	println!("cargo:rerun-if-changed=(nonexistentfile)");
-	
+
 	Ok(())
 }
