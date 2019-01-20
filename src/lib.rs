@@ -1,7 +1,6 @@
 //! Use this library in your `build.rs` script:
 //!
 //! ```
-//! extern crate git_version;
 //! fn main() { git_version::set_env(); }
 //! ```
 //!
@@ -32,7 +31,6 @@ pub fn set_env() {
 /// your `build.rs` script:
 ///
 /// ```
-/// extern crate git_version;
 /// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
 /// ```
 pub fn set_env_with_name(name: &str) {
