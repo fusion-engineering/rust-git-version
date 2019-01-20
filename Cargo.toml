@@ -8,3 +8,4 @@ repository = "https://github.com/m-ou-se/rust-git-version"
 documentation = "https://docs.rs/git-version/"
 keywords = ["git", "version", "build"]
 categories = ["development-tools", "development-tools::build-utils"]
+edition = "2018"

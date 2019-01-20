@@ -1,7 +1,6 @@
 //! Use this library in your `build.rs` script:
 //!
 //! ```
-//! extern crate git_version;
 //! fn main() { git_version::set_env(); }
 //! ```
 //!
@@ -35,6 +34,12 @@ use std::io::Result;
 ///
 /// Also instructs cargo to *always* re-run the build script and recompile the
 /// code, to make sure the version number is always correct.
+///
+/// # Panics
+///
+/// This function will panic if an error occurs during repository inspection.
+/// For details see [`GitVersion::set_env()`][GitVersion::set_env()].
+///
 pub fn set_env() {
 	GitVersion::new()
 		.set_env()
@@ -46,9 +51,14 @@ pub fn set_env() {
 /// your `build.rs` script:
 ///
 /// ```
-/// extern crate git_version;
 /// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
 /// ```
+///
+/// # Panics
+///
+/// This function will panic if an error occurs during repository inspection.
+/// For details see [`GitVersion::set_env()`][GitVersion::set_env()].
+///
 pub fn set_env_with_name(name: &str) {
 	GitVersion::new()
 		.env_var_name(name.to_string())
@@ -342,13 +352,19 @@ impl GitVersion {
 	}
 	
 	/// Use the configuration of `self` to get the git version and set the environment
-	/// variable falling back to `"undetermined"` on error.
+	/// variable falling back to panicing on error.
 	///
 	/// For more details see
-	/// [`set_env_with_default`][GitVersion::set_env_with_default()].
+	/// [`try_set_env`][GitVersion::try_set_env()].
+	///
+	/// # Panics
+	///
+	/// This function will panic if `try_set_env` returns an error.
 	///
 	pub fn set_env(&self) {
-		self.set_env_with_default("undetermined");
+		if let Err(e) = self.try_set_env() {
+			panic!("[git-version] Error: {}", e);
+		}
 	}
 	
 	/// Use the configuration of `self` to get the git version and set the environment
