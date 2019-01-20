@@ -14,7 +14,7 @@
 //! Does not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use std::process::Command;
+use std::process::{exit, Stdio, Command};
 
 /// Instruct cargo to set the VERSION environment variable to the version as
 /// indicated by `git describe --always --dirty=-modified`.
@@ -35,7 +35,8 @@ pub fn set_env() {
 /// ```
 pub fn set_env_with_name(name: &str) {
 	if let Err(e) = try_set_env_with_name(name) {
-		panic!("[git-version] Error: {}", e);
+		eprintln!("[git-version] Error: {}", e);
+		exit(1);
 	}
 }
 
@@ -50,16 +51,13 @@ pub fn set_env_with_name(name: &str) {
 pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
 	let cmd = Command::new("git")
 		.args(&["describe", "--always", "--dirty=-modified"])
+		.stderr(Stdio::inherit())
 		.output()?;
 
 	if !cmd.status.success() {
 		return Err(std::io::Error::new(
 			std::io::ErrorKind::Other,
-			format!(
-				"Git failed to describe HEAD, return code: {:?}\n{}",
-				cmd.status.code(),
-				String::from_utf8_lossy(&cmd.stderr)
-			),
+			format!("`git describe' failed: {}", cmd.status),
 		));
 	}
 
