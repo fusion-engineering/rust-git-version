@@ -35,11 +35,7 @@ pub fn set_env() {
 /// ```
 pub fn set_env_with_name(name: &str) {
 	if let Err(e) = try_set_env_with_name(name) {
-		// Catch general error
-		eprintln!("[git-version] Error: {}", e);
-		
-		println!("cargo:rustc-env={}={}", name, "undetermined");
-		println!("cargo:rerun-if-changed=(nonexistentfile)");
+		panic!("[git-version] Error: {}", e);
 	}
 }
 
