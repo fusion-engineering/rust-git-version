@@ -15,6 +15,10 @@
 //! So you must have `git` installed somewhere in your `PATH`.
 
 use std::process::{exit, Command, Stdio};
+use proc_macro_hack::proc_macro_hack;
+
+#[proc_macro_hack]
+pub use git_version_macro::git_describe;
 
 /// Instruct cargo to set the VERSION environment variable to the version as
 /// indicated by `git describe --always --dirty=-modified`.
