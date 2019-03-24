@@ -20,6 +20,9 @@ use proc_macro_hack::proc_macro_hack;
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
 
+#[proc_macro_hack]
+pub use git_version_macro::git_version;
+
 pub use git_version_impl::{
 	describe,
 	describe_cwd,

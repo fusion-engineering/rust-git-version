@@ -55,6 +55,14 @@ impl syn::parse::Parse for ArgList {
 	}
 }
 
+struct Nothing;
+
+impl syn::parse::Parse for Nothing {
+	fn parse(_input: syn::parse::ParseStream) -> syn::Result<Self> {
+		Ok(Nothing)
+	}
+}
+
 /// Call `git describe` at compile time with custom flags.
 ///
 /// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
@@ -68,6 +76,29 @@ pub fn git_describe(input: TokenStream) -> TokenStream {
 	let args : Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
 
 	let version      = describe_cwd(&args).expect("failed to run `git describe`");
+	let dependencies = git_dependencies();
+
+	quote!({
+		#dependencies;
+		#version
+	}).into()
+}
+
+/// Get the git version for the source code.
+///
+/// The version string will be created by calling `git describe --always --dirty=-modified`.
+/// Use `git_describe!(...)` if you want to pass different flags to `git describe`.
+/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
+///
+/// For example:
+/// ```no_compile
+/// let version = git_version();
+/// ```
+#[proc_macro_hack]
+pub fn git_version(input: TokenStream) -> TokenStream {
+	parse_macro_input!(input as Nothing);
+
+	let version      = version_cwd().expect("failed to run `git describe`");
 	let dependencies = git_dependencies();
 
 	quote!({
