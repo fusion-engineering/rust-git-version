@@ -11,23 +11,12 @@ use git_version_impl::{version_cwd, describe_cwd, git_dir_cwd};
 fn git_dependencies() -> proc_macro2::TokenStream {
 	let git_dir = git_dir_cwd().expect("failed to determine .git directory");
 
-	let head = git_dir.join("HEAD");
-	let head = head.canonicalize().expect("failed to canonicalize path to .git/HEAD");
-	let head = head.to_str().expect("invalid UTF-8 in path to .git/HEAD");
-	let mut tokens = quote!{
+	let head = git_dir.join("logs/HEAD").canonicalize().expect("failed to canonicalize path to .git/logs/HEAD");
+	let head = head.to_str().expect("invalid UTF-8 in path to .git/logs/HEAD");
+
+	quote!{
 		include_bytes!(#head);
-	};
-
-	for entry in git_dir.join("refs/heads").read_dir().expect("failed to iterate over git heads") {
-		let entry = entry.expect("error occurred while iterating over git heads").path();
-		let entry = entry.canonicalize().expect("failed to canonicalize path to .git/refs/heads");
-		let entry = entry.to_str().expect("invalid UTF-8 in path to head in .git/refs/heads");
-		tokens.extend(quote!{
-			include_bytes!(#entry);
-		});
 	}
-
-	tokens
 }
 
 #[proc_macro]
