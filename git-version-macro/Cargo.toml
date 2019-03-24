@@ -1,7 +1,10 @@
 [package]
 name = "git-version-macro"
 version = "0.0.1"
-authors = ["David Roundy <daveroundy@gmail.com>"]
+authors = [
+	"David Roundy <daveroundy@gmail.com>",
+	"Maarten de Vries <maarten@de-vri.es>",
+]
 edition = "2018"
 description = "Internal macro crate for git-version."
 repository = "https://github.com/m-ou-se/rust-git-version"
@@ -15,3 +18,5 @@ proc-macro = true
 quote = "0.6"
 proc-macro2 = "0.4.24"
 proc-macro-hack = "0.5"
+syn = "0.15"
+git-version-impl = { version = "0.3", path = "../git-version-impl" }
