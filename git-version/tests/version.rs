@@ -1,4 +1,4 @@
-use git_version::git_describe;
+use git_version::{git_describe, git_version};
 
 #[test]
 fn git_describe_is_right() {
@@ -10,4 +10,5 @@ fn git_describe_is_right() {
 	println!("name = {}", name);
 	println!("GIT_VERSION = {}", git_describe!("--always", "--dirty=-modified"));
 	assert_eq!(git_describe!("--always", "--dirty=-modified"), name);
+	assert_eq!(git_version!(), name);
 }
