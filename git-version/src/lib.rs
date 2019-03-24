@@ -14,11 +14,18 @@
 //! Does not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use std::process::{exit, Command, Stdio};
+use std::process::exit;
 use proc_macro_hack::proc_macro_hack;
 
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
+
+pub use git_version_impl::{
+	describe,
+	describe_cwd,
+	version,
+	version_cwd,
+};
 
 /// Instruct cargo to set the VERSION environment variable to the version as
 /// indicated by `git describe --always --dirty=-modified`.
@@ -53,21 +60,9 @@ pub fn set_env_with_name(name: &str) {
 /// named `name` to is set to the version as indicated by
 /// `git describe --always --dirty=-modified`.
 pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
-	let cmd = Command::new("git")
-		.args(&["describe", "--always", "--dirty=-modified"])
-		.stderr(Stdio::inherit())
-		.output()?;
+	let version = version_cwd()?;
 
-	if !cmd.status.success() {
-		return Err(std::io::Error::new(
-			std::io::ErrorKind::Other,
-			format!("`git describe' failed: {}", cmd.status),
-		));
-	}
-
-	let ver = String::from_utf8_lossy(&cmd.stdout);
-
-	println!("cargo:rustc-env={}={}", name, ver);
+	println!("cargo:rustc-env={}={}", name, version);
 	println!("cargo:rerun-if-changed=(nonexistentfile)");
 
 	Ok(())
