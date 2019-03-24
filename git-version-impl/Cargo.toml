@@ -1,0 +1,11 @@
+[package]
+name = "git-version-impl"
+description = "Internal functions used by git-version."
+version = "0.3.0"
+authors = ["Maarten de Vries <maarten@de-vri.es>"]
+license = "BSD-2-Clause"
+repository = "https://github.com/m-ou-se/rust-git-version"
+documentation = "https://docs.rs/git-version/"
+keywords = ["git", "version", "build"]
+categories = ["development-tools", "development-tools::build-utils"]
+edition = "2018"
