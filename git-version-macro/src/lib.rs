@@ -1,96 +1,77 @@
 extern crate proc_macro;
 
-use proc_macro::{ TokenStream };
-use quote::{ quote };
-use std::path::Path;
+use proc_macro::TokenStream;
 use proc_macro_hack::proc_macro_hack;
+use quote::quote;
+use syn::parse_macro_input;
+
+use git_version_impl::{version_cwd, describe_cwd, git_dir_cwd};
+
+/// Create a token stream representing dependencies on the git state.
+fn git_dependencies() -> proc_macro2::TokenStream {
+	let git_dir = git_dir_cwd().expect("failed to determine .git directory");
+
+	let head = git_dir.join("HEAD");
+	let head = head.canonicalize().expect("failed to canonicalize path to .git/HEAD");
+	let head = head.to_str().expect("invalid UTF-8 in path to .git/HEAD");
+	let mut tokens = quote!{
+		include_bytes!(#head);
+	};
+
+	for entry in git_dir.join("refs/heads").read_dir().expect("failed to iterate over git heads") {
+		let entry = entry.expect("error occurred while iterating over git heads").path();
+		let entry = entry.canonicalize().expect("failed to canonicalize path to .git/refs/heads");
+		let entry = entry.to_str().expect("invalid UTF-8 in path to head in .git/refs/heads");
+		tokens.extend(quote!{
+			include_bytes!(#entry);
+		});
+	}
+
+	tokens
+}
 
 #[proc_macro]
 pub fn declare(input: TokenStream) -> TokenStream {
+
 	let identifier = proc_macro2::TokenStream::from(input);
-	let cwd = std::env::current_dir().unwrap();
-	let head = cwd.join(".git/HEAD").to_str().unwrap().to_string();
-	let mut interesting_files = vec![head];
-	let refs = Path::new(".git/refs/heads");
-	for entry in refs.read_dir().expect("read_dir call failed") {
-		if let Ok(entry) = entry {
-			interesting_files.push(cwd.join(entry.path()).to_str().unwrap().to_string());
-		}
-	}
-	let vec = std::process::Command::new("git")
-		.args(&["describe", "--always", "--dirty"])
-		.output()
-		.expect("failed to execute git").stdout;
-	let name = std::str::from_utf8(&vec[..vec.len()-1]).expect("non-utf8 error?!");
-	let x = quote!{
-		fn __unused_by_git_version() {
-			// This is included simply to cause cargo to rebuild when
-			// a new commit is made.
-			#( include_str!(#interesting_files); )*
-		}
-		const #identifier: &'static str = {
-			#name
-		};
+
+	let version = version_cwd().expect("failed to determine git version");
+	let mut tokens = quote!{
+		const #identifier: &'static str = #version;
 	};
-	// println!("tokens are {}", x);
-	x.into()
+
+	tokens.extend(git_dependencies());
+	tokens.into()
 }
 
-/// Use the given template to create a string.
+struct ArgList{
+	args : syn::punctuated::Punctuated<syn::LitStr, syn::token::Comma>,
+}
+
+impl syn::parse::Parse for ArgList {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		type Inner = syn::punctuated::Punctuated<syn::LitStr, syn::token::Comma>;
+		Ok(Self{args: Inner::parse_terminated(&input)?})
+	}
+}
+
+/// Call `git describe` at compile time with custom flags.
 ///
-/// You can think of this as being kind of like `format!` on strange drugs.
+/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
+///
+/// For example:
+/// ```no_compile
+/// let version = git_describe!("--always", "--dirty");
+/// ```
 #[proc_macro_hack]
 pub fn git_describe(input: TokenStream) -> TokenStream {
-	let mut args = Vec::new();
-	let mut next_arg = String::new();
-	for t in input.into_iter() {
-		let x = t.to_string();
-		let last_char = next_arg.clone().pop(); // yes, this is terribly wasteful...
-		if next_arg.len() > 0 && next_arg != "-" && next_arg != "--" && x == "-"
-			&& last_char != Some('=')
-			{
-				args.push(next_arg.clone());
-				next_arg = String::new();
-			}
-		next_arg.extend(x.chars());
-	}
-	if next_arg.len() > 0 {
-		args.push(next_arg);
-	}
-	let cwd = std::env::current_dir().unwrap();
-	let head = cwd.join(".git/HEAD").to_str().unwrap().to_string();
-	let mut interesting_files = vec![head];
-	let refs = Path::new(".git/refs/heads");
-	for entry in refs.read_dir().expect("read_dir call failed") {
-		if let Ok(entry) = entry {
-			interesting_files.push(cwd.join(entry.path()).to_str().unwrap().to_string());
-		}
-	}
-	let mut cmd = std::process::Command::new("git");
-	cmd.args(&["describe", "--always"]);
-	for a in args.iter() {
-		cmd.arg(&a);
-	}
-	let vec = cmd.output().expect("failed to execute git").stdout;
-	if vec.len() == 0 {
-		panic!("the command {:?} exited without returning a description", cmd);
-	}
-	let name = std::str::from_utf8(&vec[..vec.len()-1]).expect("non-utf8 error?!");
-	let x = quote!{
-		{
-			// This is included simply to cause cargo to rebuild when
-			// a new commit is made.
-			#( include_str!(#interesting_files); )*
-			#name
-		}
-	};
-	x.into()
-}
+	let args : Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
 
-#[cfg(test)]
-mod tests {
-	#[test]
-	fn it_works() {
-		assert_eq!(2 + 2, 4);
-	}
+	let version      = describe_cwd(&args).expect("failed to run `git describe`");
+	let dependencies = git_dependencies();
+
+	quote!({
+		#dependencies;
+		#version
+	}).into()
 }
