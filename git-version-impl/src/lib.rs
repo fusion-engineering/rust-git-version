@@ -5,6 +5,8 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 use std::ffi::OsStr;
 
+pub const VERSION_ARGS : [&str; 2] = ["--always", "--dirty=-modified"];
+
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 	if input.len() > 0 && input[input.len() - 1] == b'\n' {
@@ -43,7 +45,7 @@ pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String> where
 /// This runs `git describe --always --dirty=-modified`.
 /// See [describe] for a version that allows you to specify the arguments manually.
 pub fn version(repository: impl AsRef<Path>) -> std::io::Result<String> {
-	describe(repository, &["--always", "--dirty=-modified"])
+	describe(repository, &VERSION_ARGS)
 }
 
 /// Run `git describe` for the current working directory with some default options to get version information from git.
@@ -95,9 +97,9 @@ fn verbose_command_error<C>(command: C, output: std::process::Output) -> std::io
 
 	// If the command terminated with non-zero exit code, return an error.
 	} else if let Some(status) = output.status.code() {
-		// Include stderr in the error message, if it's valid UTF-8 and not empty.
-		let message = strip_trailing_newline(output.stderr);
-		if let Some(message) = String::from_utf8(message).ok().filter(|x| !x.is_empty()) {
+		// Include the first line of stderr in the error message, if it's valid UTF-8 and not empty.
+		let message = output.stderr.splitn(2, |c| *c == b'\n').next().unwrap();
+		if let Some(message) = String::from_utf8(message.to_vec()).ok().filter(|x| !x.is_empty()) {
 			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} failed with status {}: {}", command, status, message)))
 		} else {
 			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} failed with status {}", command, status)))
