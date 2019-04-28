@@ -88,14 +88,6 @@ impl syn::parse::Parse for Nothing {
 	}
 }
 
-/// Call `git describe` at compile time with custom flags.
-///
-/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
-///
-/// For example:
-/// ```no_compile
-/// let version = git_describe!("--always", "--dirty");
-/// ```
 #[proc_macro_hack]
 pub fn git_describe(input: TokenStream) -> TokenStream {
 	let args: Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
@@ -108,16 +100,6 @@ pub fn git_describe(input: TokenStream) -> TokenStream {
 	TokenStream::from(tokens)
 }
 
-/// Get the git version for the source code.
-///
-/// The version string will be created by calling `git describe --always --dirty=-modified`.
-/// Use `git_describe!(...)` if you want to pass different flags to `git describe`.
-/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
-///
-/// For example:
-/// ```no_compile
-/// let version = git_version();
-/// ```
 #[proc_macro_hack]
 pub fn git_version(input: TokenStream) -> TokenStream {
 	parse_macro_input!(input as Nothing);

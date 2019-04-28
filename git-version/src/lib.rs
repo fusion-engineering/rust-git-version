@@ -13,8 +13,25 @@
 
 use proc_macro_hack::proc_macro_hack;
 
+/// Invoke `git describe` at compile time with custom flags.
+///
+/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
+///
+/// For example:
+/// ```no_compile
+/// const VERSION : &str = git_describe!("--always", "--dirty");
+/// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
 
+/// Get the git version for the source code.
+///
+/// The version string will be created by calling `git describe --always --dirty=-modified`.
+/// Use [`git_describe`] if you want to pass different flags to `git describe`.
+///
+/// For example:
+/// ```no_compile
+/// const VERSION : &str = git_version!();
+/// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_version;
