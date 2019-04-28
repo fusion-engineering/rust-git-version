@@ -1,0 +1,24 @@
+[package]
+name = "git-version-macro"
+version = "0.3.0"
+authors = [
+	"David Roundy <daveroundy@gmail.com>",
+	"Maarten de Vries <maarten@de-vri.es>",
+]
+edition = "2018"
+description = "Internal macro crate for git-version."
+repository = "https://github.com/m-ou-se/rust-git-version"
+keywords = ["git"]
+license = "BSD-2-Clause"
+
+[features]
+nightly = []
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "0.6"
+proc-macro2 = "0.4.24"
+proc-macro-hack = "0.5"
+syn = "0.15"

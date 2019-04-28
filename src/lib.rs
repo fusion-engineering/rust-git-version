@@ -1,70 +1,37 @@
-//! Use this library in your `build.rs` script:
+//! Embed git information in your code at compile-time.
 //!
 //! ```
-//! fn main() { git_version::set_env(); }
+//! use git_version::git_version;
+//! const GIT_VERSION : &str = git_version!();
 //! ```
-//!
-//! Then you can use `env!("VERSION")` to get the version number in your code.
-//! The version number will be based on the relevant git tag (if any), and git
-//! commit hash if there is no exactly matching tag. See `git help describe`.
 //!
 //! The version number will have a `-modified` suffix if your git worktree had
 //! untracked or changed files.
 //!
-//! Does not depend on libgit, but simply uses the `git` binary directly.
+//! These macros do not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use std::process::{exit, Command, Stdio};
+use proc_macro_hack::proc_macro_hack;
 
-/// Instruct cargo to set the VERSION environment variable to the version as
-/// indicated by `git describe --always --dirty=-modified`.
+/// Invoke `git describe` at compile time with custom flags.
 ///
-/// Also instructs cargo to *always* re-run the build script and recompile the
-/// code, to make sure the version number is always correct.
-pub fn set_env() {
-	set_env_with_name("VERSION");
-}
-
-/// Same as `set_env`, but using `name` as the name for the environment
-/// variable.
+/// All arguments to the macro must be string literals, and will be passed directly to `git describe`.
 ///
-/// You can, for example, override the `CARGO_PKG_VERSION` using in
-/// your `build.rs` script:
-///
+/// For example:
+/// ```no_compile
+/// const VERSION : &str = git_describe!("--always", "--dirty");
 /// ```
-/// fn main() { git_version::set_env_with_name("CARGO_PKG_VERSION"); }
-/// ```
-pub fn set_env_with_name(name: &str) {
-	if let Err(e) = try_set_env_with_name(name) {
-		eprintln!("[git-version] Error: {}", e);
-		exit(1);
-	}
-}
+#[proc_macro_hack]
+pub use git_version_macro::git_describe;
 
-/// Same as `set_env_with_name`, but with explicit feedback about success and
-/// failure.
+/// Get the git version for the source code.
 ///
-/// If `Err` is returned, no environment variable is created.
-/// If `Ok` is returned, cargo is instructed to set the environment variable
-/// named `name` to is set to the version as indicated by
-/// `git describe --always --dirty=-modified`.
-pub fn try_set_env_with_name(name: &str) -> std::io::Result<()> {
-	let cmd = Command::new("git")
-		.args(&["describe", "--always", "--dirty=-modified"])
-		.stderr(Stdio::inherit())
-		.output()?;
-
-	if !cmd.status.success() {
-		return Err(std::io::Error::new(
-			std::io::ErrorKind::Other,
-			format!("`git describe' failed: {}", cmd.status),
-		));
-	}
-
-	let ver = String::from_utf8_lossy(&cmd.stdout);
-
-	println!("cargo:rustc-env={}={}", name, ver);
-	println!("cargo:rerun-if-changed=(nonexistentfile)");
-
-	Ok(())
-}
+/// The version string will be created by calling `git describe --always --dirty=-modified`.
+/// Use [`git_describe`] if you want to pass different flags to `git describe`.
+///
+/// For example:
+/// ```no_compile
+/// const VERSION : &str = git_version!();
+/// ```
+#[proc_macro_hack]
+pub use git_version_macro::git_version;
