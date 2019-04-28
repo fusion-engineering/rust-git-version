@@ -13,6 +13,7 @@ documentation = "https://docs.rs/git-version/"
 keywords = ["git", "version", "build"]
 categories = ["development-tools", "development-tools::build-utils"]
 edition = "2018"
+readme = "README.md"
 
 [dependencies]
 proc-macro-hack = "0.5"
