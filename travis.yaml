@@ -1,0 +1,5 @@
+languague: rust
+rust:
+   - stable
+   - beta
+   - nightly
