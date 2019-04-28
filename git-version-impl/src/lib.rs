@@ -1,11 +1,10 @@
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 ///! This crate contains internal functions used by `git-version` and `git-version-macro`.
 ///! Some of them may be exposed by `git-version`.
-
 use std::process::Command;
-use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 
-pub const VERSION_ARGS : [&str; 2] = ["--always", "--dirty=-modified"];
+pub const VERSION_ARGS: [&str; 2] = ["--always", "--dirty=-modified"];
 
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
@@ -16,12 +15,14 @@ fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 }
 
 /// Run `git describe` for a given repository with custom flags to get version information from git.
-pub fn describe<I, S>(repository: impl AsRef<Path>, args: I) -> std::io::Result<String> where
+pub fn describe<I, S>(repository: impl AsRef<Path>, args: I) -> std::io::Result<String>
+where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
 	let cmd = Command::new("git")
-		.arg("-C").arg(repository.as_ref())
+		.arg("-C")
+		.arg(repository.as_ref())
 		.arg("describe")
 		.args(args)
 		.output()?;
@@ -33,7 +34,8 @@ pub fn describe<I, S>(repository: impl AsRef<Path>, args: I) -> std::io::Result<
 }
 
 /// Run `git describe` for the current working directory with custom flags to get version information from git.
-pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String> where
+pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String>
+where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
@@ -62,7 +64,8 @@ pub fn git_dir(repository: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 
 	// Run git rev-parse --git-dir, and capture standard output.
 	let cmd = Command::new("git")
-		.arg("-C").arg(repository)
+		.arg("-C")
+		.arg(repository)
 		.args(&["rev-parse", "--git-dir"])
 		.output()?;
 
@@ -70,7 +73,8 @@ pub fn git_dir(repository: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 	let output = strip_trailing_newline(output.stdout);
 
 	// Parse the output as UTF-8.
-	let path = std::str::from_utf8(&output).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "invalid UTF-8 in path to .git directory"))?;
+	let path = std::str::from_utf8(&output)
+		.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "invalid UTF-8 in path to .git directory"))?;
 
 	// If the path is relative, it's relative to the repository path.
 	Ok(repository.join(path))
@@ -83,12 +87,19 @@ pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
 
 #[test]
 fn test_git_dir() {
-	assert_eq!(git_dir_cwd().unwrap().canonicalize().unwrap(), Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap());
-	assert_eq!(git_dir(".").unwrap().canonicalize().unwrap(),  Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap());
+	assert_eq!(
+		git_dir_cwd().unwrap().canonicalize().unwrap(),
+		Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap()
+	);
+	assert_eq!(
+		git_dir(".").unwrap().canonicalize().unwrap(),
+		Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap()
+	);
 }
 
 /// Check if a command ran successfully, and if not, return a verbose error.
-fn verbose_command_error<C>(command: C, output: std::process::Output) -> std::io::Result<std::process::Output> where
+fn verbose_command_error<C>(command: C, output: std::process::Output) -> std::io::Result<std::process::Output>
+where
 	C: std::fmt::Display,
 {
 	// If the command succeeded, just return the output as is.
@@ -100,21 +111,35 @@ fn verbose_command_error<C>(command: C, output: std::process::Output) -> std::io
 		// Include the first line of stderr in the error message, if it's valid UTF-8 and not empty.
 		let message = output.stderr.splitn(2, |c| *c == b'\n').next().unwrap();
 		if let Some(message) = String::from_utf8(message.to_vec()).ok().filter(|x| !x.is_empty()) {
-			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} failed with status {}: {}", command, status, message)))
+			Err(std::io::Error::new(
+				std::io::ErrorKind::Other,
+				format!("{} failed with status {}: {}", command, status, message),
+			))
 		} else {
-			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} failed with status {}", command, status)))
+			Err(std::io::Error::new(
+				std::io::ErrorKind::Other,
+				format!("{} failed with status {}", command, status),
+			))
 		}
 
 	// The command was killed by a signal.
 	} else {
 		// Include the signal number on Unix.
-		#[cfg(target_family = "unix")] {
+		#[cfg(target_family = "unix")]
+		{
 			use std::os::unix::process::ExitStatusExt;
 			let signal = output.status.signal().unwrap();
-			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} killed by signal {}",  command, signal)))
+			Err(std::io::Error::new(
+				std::io::ErrorKind::Other,
+				format!("{} killed by signal {}", command, signal),
+			))
 		}
-		#[cfg(not(target_family = "unix"))] {
-			Err(std::io::Error::new(std::io::ErrorKind::Other, format!("{} killed by signal", command)))
+		#[cfg(not(target_family = "unix"))]
+		{
+			Err(std::io::Error::new(
+				std::io::ErrorKind::Other,
+				format!("{} killed by signal", command),
+			))
 		}
 	}
 }
