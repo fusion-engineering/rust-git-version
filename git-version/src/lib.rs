@@ -14,8 +14,8 @@
 //! Does not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use std::process::exit;
 use proc_macro_hack::proc_macro_hack;
+use std::process::exit;
 
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
@@ -23,12 +23,7 @@ pub use git_version_macro::git_describe;
 #[proc_macro_hack]
 pub use git_version_macro::git_version;
 
-pub use git_version_impl::{
-	describe,
-	describe_cwd,
-	version,
-	version_cwd,
-};
+pub use git_version_impl::{describe, describe_cwd, version, version_cwd};
 
 /// Instruct cargo to set the VERSION environment variable to the version as
 /// indicated by `git describe --always --dirty=-modified`.
