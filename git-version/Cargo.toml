@@ -16,5 +16,4 @@ edition = "2018"
 
 [dependencies]
 proc-macro-hack = "0.5"
-git-version-impl  = { version = "0.3.0", path = "../git-version-impl" }
 git-version-macro = { version = "0.0.1", path = "../git-version-macro" }

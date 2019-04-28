@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-///! This crate contains internal functions used by `git-version` and `git-version-macro`.
-///! Some of them may be exposed by `git-version`.
+
 use std::process::Command;
 
 pub const VERSION_ARGS: [&str; 2] = ["--always", "--dirty=-modified"];
@@ -40,22 +39,6 @@ where
 	S: AsRef<OsStr>,
 {
 	describe(".", args)
-}
-
-/// Run `git describe` for a given repository with some default options to get version information from git.
-///
-/// This runs `git describe --always --dirty=-modified`.
-/// See [describe] for a version that allows you to specify the arguments manually.
-pub fn version(repository: impl AsRef<Path>) -> std::io::Result<String> {
-	describe(repository, &VERSION_ARGS)
-}
-
-/// Run `git describe` for the current working directory with some default options to get version information from git.
-///
-/// This runs `git describe --always --dirty=-modified`.
-/// See [describe] for a version that allows you to specify the arguments manually.
-pub fn version_cwd() -> std::io::Result<String> {
-	version(".")
 }
 
 /// Get the git directory for a repository.

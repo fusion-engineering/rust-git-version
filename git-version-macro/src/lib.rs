@@ -7,7 +7,8 @@ use quote::quote;
 use std::path::Path;
 use syn::parse_macro_input;
 
-use git_version_impl::{describe_cwd, git_dir_cwd, VERSION_ARGS};
+mod utils;
+use utils::{describe_cwd, git_dir_cwd, VERSION_ARGS};
 
 macro_rules! error {
 	($($args:tt)*) => { syn::Error::new(Span::call_site(), format!($($args)*)) };
