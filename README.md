@@ -4,7 +4,7 @@ Embed git information in your code at compile-time.
 
 ```rust
 use git_version::git_version;
-const GIT_VERSION : &str = git_version!();
+const GIT_VERSION: &str = git_version!();
 ```
 
 The version number will have a `-modified` suffix if your git worktree had
