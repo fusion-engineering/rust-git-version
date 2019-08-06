@@ -1,3 +1,5 @@
+#![no_std]
+
 //! Embed git information in your code at compile-time.
 //!
 //! ```
