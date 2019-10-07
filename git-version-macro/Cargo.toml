@@ -18,7 +18,7 @@ nightly = []
 proc-macro = true
 
 [dependencies]
-quote = "0.6"
-proc-macro2 = "0.4.24"
+quote = "1.0"
+proc-macro2 = "1.0"
 proc-macro-hack = "0.5"
-syn = "0.15"
+syn = "1.0"
