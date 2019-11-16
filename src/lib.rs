@@ -26,6 +26,20 @@ use proc_macro_hack::proc_macro_hack;
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
 
+/// Invoke `git describe` at compile time with custom flags, or use the cargo version.
+///
+/// This is like [`git_describe`], but falls back on the
+/// `CARGO_PKG_VERSION` environment variable if the code is not being
+/// built in a git repository.  All arguments to the macro must be
+/// string literals, and will be passed directly to `git describe`.
+///
+/// For example:
+/// ```
+/// const VERSION : &str = git_version::git_describe_safe!("--always", "--dirty");
+/// ```
+#[proc_macro_hack]
+pub use git_version_macro::git_describe_safe;
+
 /// Get the git version for the source code.
 ///
 /// The version string will be created by calling `git describe --always --dirty=-modified`.
@@ -37,3 +51,19 @@ pub use git_version_macro::git_describe;
 /// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_version;
+
+/// Get the git version or if unavailable the cargo version.
+///
+/// This is like [`git_version`], but falls back on the
+/// `CARGO_PKG_VERSION` environment variable if the code is not being
+/// built in a git repository.  The version string will be created by
+/// calling `git describe --always --dirty=-modified`.  Use
+/// [`git_describe_safe`] if you want to pass different flags to `git
+/// describe`.
+///
+/// For example:
+/// ```
+/// const VERSION : &str = git_version::git_version_safe!();
+/// ```
+#[proc_macro_hack]
+pub use git_version_macro::git_version_safe;

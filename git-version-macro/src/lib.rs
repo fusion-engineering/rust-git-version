@@ -101,12 +101,40 @@ pub fn git_describe(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_hack]
-pub fn git_version(input: TokenStream) -> TokenStream {
-	parse_macro_input!(input as Nothing);
+pub fn git_describe_safe(input: TokenStream) -> TokenStream {
+	let args: Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
 
-	let tokens = match git_describe_impl(&VERSION_ARGS) {
+	let tokens = match git_describe_impl(args) {
 		Ok(x) => x,
+		Err(_) => quote!{
+      env!("CARGO_PKG_VERSION")
+    }
+	};
+
+	TokenStream::from(tokens)
+}
+
+#[proc_macro_hack]
+pub fn git_version(input: TokenStream) -> TokenStream {
+  parse_macro_input!(input as Nothing);
+
+  let tokens = match git_describe_impl(&VERSION_ARGS) {
+	  Ok(x) => x,
 		Err(e) => e.to_compile_error(),
+	};
+
+	TokenStream::from(tokens)
+}
+
+#[proc_macro_hack]
+pub fn git_version_safe(input: TokenStream) -> TokenStream {
+  parse_macro_input!(input as Nothing);
+
+  let tokens = match git_describe_impl(&VERSION_ARGS) {
+	  Ok(x) => x,
+		Err(_) => quote!{
+      env!("CARGO_PKG_VERSION")
+    }
 	};
 
 	TokenStream::from(tokens)
