@@ -35,10 +35,10 @@ pub use git_version_macro::git_describe;
 ///
 /// For example:
 /// ```
-/// const VERSION : &str = git_version::git_describe_safe!("--always", "--dirty");
+/// const VERSION : &str = git_version::git_describe_or_cargo_version!("--always", "--dirty");
 /// ```
 #[proc_macro_hack]
-pub use git_version_macro::git_describe_safe;
+pub use git_version_macro::git_describe_or_cargo_version;
 
 /// Get the git version for the source code.
 ///
@@ -58,12 +58,12 @@ pub use git_version_macro::git_version;
 /// `CARGO_PKG_VERSION` environment variable if the code is not being
 /// built in a git repository.  The version string will be created by
 /// calling `git describe --always --dirty=-modified`.  Use
-/// [`git_describe_safe`] if you want to pass different flags to `git
+/// [`git_describe_or_cargo_version`] if you want to pass different flags to `git
 /// describe`.
 ///
 /// For example:
 /// ```
-/// const VERSION : &str = git_version::git_version_safe!();
+/// const VERSION : &str = git_version::git_or_cargo_version!();
 /// ```
 #[proc_macro_hack]
-pub use git_version_macro::git_version_safe;
+pub use git_version_macro::git_or_cargo_version;
