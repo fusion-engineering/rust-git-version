@@ -50,3 +50,14 @@ use proc_macro_hack::proc_macro_hack;
 /// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_version;
+
+/// Run `git describe` at compile time with custom flags.
+///
+/// This is just a short-hand for `git_version!(args = [...])`,
+/// to be backwards compatible with earlier versions of this crate.
+#[macro_export]
+macro_rules! git_describe {
+	($($args:tt)*) => {
+		$crate::git_version!(args = [$($args)*])
+	};
+}
