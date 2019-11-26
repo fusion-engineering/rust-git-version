@@ -36,11 +36,11 @@ use proc_macro_hack::proc_macro_hack;
 ///
 /// # Examples
 ///
-/// ```no_compile
+/// ```ignore
 /// const VERSION: &str = git_version!();
 /// ```
 ///
-/// ```no_compile
+/// ```ignore
 /// const VERSION: &str = git_version!(args = ["--abbrev=40", "-always"]);
 /// ```
 ///
