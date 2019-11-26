@@ -3,7 +3,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_hack::proc_macro_hack;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::path::{Path, PathBuf};
 use syn::{
 	bracketed,
@@ -11,7 +11,7 @@ use syn::{
 	parse_macro_input,
 	punctuated::Punctuated,
 	token::{Comma, Eq},
-	Ident, LitStr,
+	Expr, ExprLit, Ident, Lit, LitStr,
 };
 
 mod utils;
@@ -52,6 +52,11 @@ fn git_dependencies() -> syn::Result<TokenStream2> {
 #[derive(Default)]
 struct Args {
 	git_args: Option<Punctuated<LitStr, Comma>>,
+	prefix: Option<Expr>,
+	suffix: Option<Expr>,
+	cargo_prefix: Option<Expr>,
+	cargo_suffix: Option<Expr>,
+	fallback: Option<Expr>,
 }
 
 impl Parse for Args {
@@ -61,14 +66,39 @@ impl Parse for Args {
 			if input.is_empty() { break; }
 			let ident: Ident = input.parse()?;
 			let _: Eq = input.parse()?;
+			let check_dup = |dup: bool| {
+				if dup {
+					Err(error!("`{} = ` can only appear once", ident))
+				} else {
+					Ok(())
+				}
+			};
 			match ident.to_string().as_str() {
 				"args" => {
-					if result.git_args.is_some() {
-						Err(error!("`args = ` can only appear once"))?;
-					}
+					check_dup(result.git_args.is_some())?;
 					let content;
 					bracketed!(content in input);
 					result.git_args = Some(Punctuated::parse_terminated(&content)?);
+				}
+				"prefix" => {
+					check_dup(result.prefix.is_some())?;
+					result.prefix = Some(input.parse()?);
+				}
+				"suffix" => {
+					check_dup(result.suffix.is_some())?;
+					result.suffix = Some(input.parse()?);
+				}
+				"cargo_prefix" => {
+					check_dup(result.cargo_prefix.is_some())?;
+					result.cargo_prefix = Some(input.parse()?);
+				}
+				"cargo_suffix" => {
+					check_dup(result.cargo_suffix.is_some())?;
+					result.cargo_suffix = Some(input.parse()?);
+				}
+				"fallback" => {
+					check_dup(result.fallback.is_some())?;
+					result.fallback = Some(input.parse()?);
 				}
 				x => Err(error!("Unexpected argument name `{}`", x))?,
 			}
@@ -91,17 +121,49 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 	TokenStream::from(tokens)
 }
 
+fn empty_str() -> Expr {
+	Expr::from(ExprLit {
+		attrs: Vec::new(),
+		lit: Lit::Str(LitStr::new("", Span::call_site())),
+	})
+}
+
 fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let git_args = args.git_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
 		|list| list.iter().map(|x| x.value()).collect()
 	);
 
-	let version = describe_cwd(&git_args).map_err(|e| error!("{}", e))?;
-	let dependencies = git_dependencies()?;
+	let cargo_fallback = args.cargo_prefix.is_some() || args.cargo_suffix.is_some();
 
-	Ok(quote!({
-		#dependencies;
-		#version
-	}))
+	match describe_cwd(&git_args) {
+		Ok(version) => {
+			let dependencies = git_dependencies()?;
+			let prefix = args.prefix.unwrap_or_else(empty_str);
+			let suffix = args.suffix.unwrap_or_else(empty_str);
+			Ok(quote!({
+				#dependencies;
+				concat!(#prefix, #version, #suffix)
+			}))
+		}
+		Err(_) if cargo_fallback => {
+			if let Ok(version) = std::env::var("CARGO_PKG_VERSION") {
+				let prefix = args.cargo_prefix.unwrap_or_else(empty_str);
+				let suffix = args.cargo_suffix.unwrap_or_else(empty_str);
+				Ok(quote!(
+					concat!(#prefix, #version, #suffix)
+				))
+			} else if let Some(fallback) = args.fallback {
+				Ok(fallback.to_token_stream())
+			} else {
+				Err(error!("Unable to get git or cargo version"))
+			}
+		}
+		Err(_) if args.fallback.is_some() => {
+			Ok(args.fallback.to_token_stream())
+		}
+		Err(e) => {
+			Err(error!("{}", e))
+		}
+	}
 }

@@ -11,5 +11,5 @@ fn git_describe_is_right() {
 	println!("name = {}", name);
 	println!("GIT_VERSION = {}", git_version!(args = ["--always", "--dirty=-modified"]));
 	assert_eq!(git_version!(args = ["--always", "--dirty=-modified"]), name);
-	assert_eq!(git_version!(), name);
+	assert_eq!(git_version!(prefix = "[", suffix = "]"), format!("[{}]", name));
 }
