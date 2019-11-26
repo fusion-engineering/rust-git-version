@@ -11,7 +11,9 @@ mod utils;
 use self::utils::{describe_cwd, git_dir_cwd, VERSION_ARGS};
 
 macro_rules! error {
-	($($args:tt)*) => { syn::Error::new(Span::call_site(), format!($($args)*)) };
+	($($args:tt)*) => {
+		syn::Error::new(Span::call_site(), format!($($args)*))
+	};
 }
 
 /// Canonicalize the path to a file inside the git folder.
