@@ -11,7 +11,7 @@ use syn::{
 	parse_macro_input,
 	punctuated::Punctuated,
 	token::{Comma, Eq},
-	Expr, ExprLit, Ident, Lit, LitStr,
+	Expr, Ident, LitStr,
 };
 
 mod utils;
@@ -121,13 +121,6 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 	TokenStream::from(tokens)
 }
 
-fn empty_str() -> Expr {
-	Expr::from(ExprLit {
-		attrs: Vec::new(),
-		lit: Lit::Str(LitStr::new("", Span::call_site())),
-	})
-}
-
 fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let git_args = args.git_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
@@ -139,19 +132,19 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	match describe_cwd(&git_args) {
 		Ok(version) => {
 			let dependencies = git_dependencies()?;
-			let prefix = args.prefix.unwrap_or_else(empty_str);
-			let suffix = args.suffix.unwrap_or_else(empty_str);
+			let prefix = args.prefix.iter();
+			let suffix = args.suffix;
 			Ok(quote!({
 				#dependencies;
-				concat!(#prefix, #version, #suffix)
+				concat!(#(#prefix,)* #version, #suffix)
 			}))
 		}
 		Err(_) if cargo_fallback => {
 			if let Ok(version) = std::env::var("CARGO_PKG_VERSION") {
-				let prefix = args.cargo_prefix.unwrap_or_else(empty_str);
-				let suffix = args.cargo_suffix.unwrap_or_else(empty_str);
+				let prefix = args.cargo_prefix.iter();
+				let suffix = args.cargo_suffix;
 				Ok(quote!(
-					concat!(#prefix, #version, #suffix)
+					concat!(#(#prefix,)* #version, #suffix)
 				))
 			} else if let Some(fallback) = args.fallback {
 				Ok(fallback.to_token_stream())
