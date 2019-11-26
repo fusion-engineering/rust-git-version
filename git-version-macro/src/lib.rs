@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_hack::proc_macro_hack;
 use quote::quote;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use syn::parse_macro_input;
 
 mod utils;
@@ -16,40 +16,29 @@ macro_rules! error {
 	};
 }
 
-/// Canonicalize the path to a file inside the git folder.
-fn canonicalize_git_path(git_dir: impl AsRef<Path>, file: impl AsRef<Path>) -> syn::Result<String> {
-	let git_dir = git_dir.as_ref();
-	let file = file.as_ref();
-
-	let path = git_dir.join(file);
-	let path = path
+fn canonicalize_path(path: &Path) -> syn::Result<String> {
+	Ok(path
 		.canonicalize()
-		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?;
-	let path = path.to_str().ok_or_else(|| error!("invalid UTF-8 in path to {}", file.display()))?;
-
-	Ok(String::from(path))
+		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
+		.into_os_string()
+		.into_string()
+		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))?
+	)
 }
 
 /// Create a token stream representing dependencies on the git state.
 fn git_dependencies() -> syn::Result<TokenStream2> {
 	let git_dir = git_dir_cwd().map_err(|e| error!("failed to determine .git directory: {}", e))?;
 
-	let head = canonicalize_git_path(&git_dir, "logs/HEAD");
-	let index = canonicalize_git_path(&git_dir, "index");
-
-	if let Some(error) = head.as_ref().err().or(index.as_ref().err()) {
-		eprintln!(
-			"Failed to add dependencies on the git state: {}. The crate may not rebuild if the git state changes.",
-			error
-		)
-	}
-
-	let head = head.ok().map(|x| quote! { include_bytes!(#x); });
-	let index = index.ok().map(|x| quote! { include_bytes!(#x); });
+	let deps: Vec<_> = ["logs/HEAD", "index"].iter().flat_map(|&file| {
+		canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e|  {
+			eprintln!("Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.", e);
+			None
+		})
+	}).collect();
 
 	Ok(quote! {
-		#head
-		#index
+		#( include_bytes!(#deps); )*
 	})
 }
 
