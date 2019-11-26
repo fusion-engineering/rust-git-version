@@ -5,10 +5,17 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_hack::proc_macro_hack;
 use quote::quote;
 use std::path::{Path, PathBuf};
-use syn::parse_macro_input;
+use syn::{
+	bracketed,
+	parse::{Parse, ParseStream},
+	parse_macro_input,
+	punctuated::Punctuated,
+	token::{Comma, Eq},
+	Ident, LitStr,
+};
 
 mod utils;
-use self::utils::{describe_cwd, git_dir_cwd, VERSION_ARGS};
+use self::utils::{describe_cwd, git_dir_cwd};
 
 macro_rules! error {
 	($($args:tt)*) => {
@@ -42,36 +49,41 @@ fn git_dependencies() -> syn::Result<TokenStream2> {
 	})
 }
 
-struct ArgList {
-	args: syn::punctuated::Punctuated<syn::LitStr, syn::token::Comma>,
+#[derive(Default)]
+struct Args {
+	git_args: Option<Punctuated<LitStr, Comma>>,
 }
 
-impl syn::parse::Parse for ArgList {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		type Inner = syn::punctuated::Punctuated<syn::LitStr, syn::token::Comma>;
-		Ok(Self {
-			args: Inner::parse_terminated(&input)?,
-		})
+impl Parse for Args {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let mut result = Args::default();
+		loop {
+			if input.is_empty() { break; }
+			let ident: Ident = input.parse()?;
+			let _: Eq = input.parse()?;
+			match ident.to_string().as_str() {
+				"args" => {
+					if result.git_args.is_some() {
+						Err(error!("`args = ` can only appear once"))?;
+					}
+					let content;
+					bracketed!(content in input);
+					result.git_args = Some(Punctuated::parse_terminated(&content)?);
+				}
+				x => Err(error!("Unexpected argument name `{}`", x))?,
+			}
+			if input.is_empty() { break; }
+			let _: Comma = input.parse()?;
+		}
+		Ok(result)
 	}
 }
 
 #[proc_macro_hack]
-pub fn git_describe(input: TokenStream) -> TokenStream {
-	let args: Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
-
-	let tokens = match git_describe_impl(args) {
-		Ok(x) => x,
-		Err(e) => e.to_compile_error(),
-	};
-
-	TokenStream::from(tokens)
-}
-
-#[proc_macro_hack]
 pub fn git_version(input: TokenStream) -> TokenStream {
-	parse_macro_input!(input as syn::parse::Nothing);
+	let args = parse_macro_input!(input as Args);
 
-	let tokens = match git_describe_impl(&VERSION_ARGS) {
+	let tokens = match git_version_impl(args) {
 		Ok(x) => x,
 		Err(e) => e.to_compile_error(),
 	};
@@ -79,12 +91,13 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 	TokenStream::from(tokens)
 }
 
-fn git_describe_impl<I, S>(args: I) -> syn::Result<TokenStream2>
-where
-	I: IntoIterator<Item = S>,
-	S: AsRef<std::ffi::OsStr>,
-{
-	let version = describe_cwd(args).map_err(|e| error!("{}", e))?;
+fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
+	let git_args = args.git_args.map_or_else(
+		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
+		|list| list.iter().map(|x| x.value()).collect()
+	);
+
+	let version = describe_cwd(&git_args).map_err(|e| error!("{}", e))?;
 	let dependencies = git_dependencies()?;
 
 	Ok(quote!({

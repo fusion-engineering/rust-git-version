@@ -2,8 +2,6 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub const VERSION_ARGS: [&str; 2] = ["--always", "--dirty=-modified"];
-
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 	if input.len() > 0 && input[input.len() - 1] == b'\n' {
