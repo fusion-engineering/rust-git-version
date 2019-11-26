@@ -14,21 +14,6 @@ macro_rules! error {
 	($($args:tt)*) => { syn::Error::new(Span::call_site(), format!($($args)*)) };
 }
 
-macro_rules! warning {
-	($($args:tt)*) => { warning(Span::call_site(), format!($($args)*)) };
-}
-
-#[cfg(feature = "nightly")]
-fn warning(span: Span, warning: impl std::fmt::Display) -> TokenStream2 {
-	span.unwrap().warning(warning.to_string())
-}
-
-#[cfg(not(feature = "nightly"))]
-fn warning(_span: Span, warning: impl std::fmt::Display) -> TokenStream2 {
-	eprintln!("{}", warning);
-	TokenStream2::new()
-}
-
 /// Canonicalize the path to a file inside the git folder.
 fn canonicalize_git_path(git_dir: impl AsRef<Path>, file: impl AsRef<Path>) -> syn::Result<String> {
 	let git_dir = git_dir.as_ref();
@@ -50,18 +35,17 @@ fn git_dependencies() -> syn::Result<TokenStream2> {
 	let head = canonicalize_git_path(&git_dir, "logs/HEAD");
 	let index = canonicalize_git_path(&git_dir, "index");
 
-	let warning = head.as_ref().err().or(index.as_ref().err()).map(|error| {
-		warning!(
+	if let Some(error) = head.as_ref().err().or(index.as_ref().err()) {
+		eprintln!(
 			"Failed to add dependencies on the git state: {}. The crate may not rebuild if the git state changes.",
 			error
 		)
-	});
+	}
 
 	let head = head.ok().map(|x| quote! { include_bytes!(#x); });
 	let index = index.ok().map(|x| quote! { include_bytes!(#x); });
 
 	Ok(quote! {
-		#warning
 		#head
 		#index
 	})
