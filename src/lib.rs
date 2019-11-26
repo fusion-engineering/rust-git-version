@@ -4,7 +4,7 @@
 //!
 //! ```
 //! use git_version::git_version;
-//! const GIT_VERSION : &str = git_version!();
+//! const GIT_VERSION: &str = git_version!();
 //! ```
 //!
 //! The version number will have a `-modified` suffix if your git worktree had
@@ -21,7 +21,7 @@ use proc_macro_hack::proc_macro_hack;
 ///
 /// For example:
 /// ```no_compile
-/// const VERSION : &str = git_describe!("--always", "--dirty");
+/// const VERSION: &str = git_describe!("--always", "--dirty");
 /// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_describe;
@@ -33,7 +33,7 @@ pub use git_version_macro::git_describe;
 ///
 /// For example:
 /// ```no_compile
-/// const VERSION : &str = git_version!();
+/// const VERSION: &str = git_version!();
 /// ```
 #[proc_macro_hack]
 pub use git_version_macro::git_version;
