@@ -66,14 +66,6 @@ impl syn::parse::Parse for ArgList {
 	}
 }
 
-struct Nothing;
-
-impl syn::parse::Parse for Nothing {
-	fn parse(_input: syn::parse::ParseStream) -> syn::Result<Self> {
-		Ok(Nothing)
-	}
-}
-
 #[proc_macro_hack]
 pub fn git_describe(input: TokenStream) -> TokenStream {
 	let args: Vec<_> = parse_macro_input!(input as ArgList).args.iter().map(|x| x.value()).collect();
@@ -88,7 +80,7 @@ pub fn git_describe(input: TokenStream) -> TokenStream {
 
 #[proc_macro_hack]
 pub fn git_version(input: TokenStream) -> TokenStream {
-	parse_macro_input!(input as Nothing);
+	parse_macro_input!(input as syn::parse::Nothing);
 
 	let tokens = match git_describe_impl(&VERSION_ARGS) {
 		Ok(x) => x,
