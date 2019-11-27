@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-
+use std::path::PathBuf;
 use std::process::Command;
 
 pub const VERSION_ARGS: [&str; 2] = ["--always", "--dirty=-modified"];
@@ -13,15 +12,13 @@ fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 	input
 }
 
-/// Run `git describe` for a given repository with custom flags to get version information from git.
-pub fn describe<I, S>(repository: impl AsRef<Path>, args: I) -> std::io::Result<String>
+/// Run `git describe` for the current working directory with custom flags to get version information from git.
+pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String>
 where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
 	let cmd = Command::new("git")
-		.arg("-C")
-		.arg(repository.as_ref())
 		.arg("describe")
 		.args(args)
 		.output()?;
@@ -32,23 +29,10 @@ where
 	Ok(String::from_utf8_lossy(&output).to_string())
 }
 
-/// Run `git describe` for the current working directory with custom flags to get version information from git.
-pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String>
-where
-	I: IntoIterator<Item = S>,
-	S: AsRef<OsStr>,
-{
-	describe(".", args)
-}
-
-/// Get the git directory for a repository.
-pub fn git_dir(repository: impl AsRef<Path>) -> std::io::Result<PathBuf> {
-	let repository = repository.as_ref();
-
+/// Get the git directory for the current working directory.
+pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
 	// Run git rev-parse --git-dir, and capture standard output.
 	let cmd = Command::new("git")
-		.arg("-C")
-		.arg(repository)
 		.args(&["rev-parse", "--git-dir"])
 		.output()?;
 
@@ -59,23 +43,15 @@ pub fn git_dir(repository: impl AsRef<Path>) -> std::io::Result<PathBuf> {
 	let path = std::str::from_utf8(&output)
 		.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "invalid UTF-8 in path to .git directory"))?;
 
-	// If the path is relative, it's relative to the repository path.
-	Ok(repository.join(path))
-}
-
-/// Get the git directory for the current working directory.
-pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
-	git_dir(".")
+	Ok(PathBuf::from(path))
 }
 
 #[test]
 fn test_git_dir() {
+	use std::path::Path;
+
 	assert_eq!(
 		git_dir_cwd().unwrap().canonicalize().unwrap(),
-		Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap()
-	);
-	assert_eq!(
-		git_dir(".").unwrap().canonicalize().unwrap(),
 		Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap()
 	);
 }

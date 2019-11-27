@@ -8,7 +8,7 @@ authors = [
 	"David Roundy <daveroundy@gmail.com>",
 ]
 license = "BSD-2-Clause"
-repository = "https://github.com/m-ou-se/rust-git-version"
+repository = "https://github.com/fusion-engineering/rust-git-version"
 documentation = "https://docs.rs/git-version/"
 keywords = ["git", "version", "build"]
 categories = ["development-tools", "development-tools::build-utils"]

@@ -4,10 +4,11 @@ version = "0.3.3"
 authors = [
 	"David Roundy <daveroundy@gmail.com>",
 	"Maarten de Vries <maarten@de-vri.es>",
+	"Mara Bos <m-ou.se@m-ou.se>",
 ]
 edition = "2018"
 description = "Internal macro crate for git-version."
-repository = "https://github.com/m-ou-se/rust-git-version"
+repository = "https://github.com/fusion-engineering/rust-git-version"
 keywords = ["git"]
 license = "BSD-2-Clause"
 
