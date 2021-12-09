@@ -2,7 +2,6 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use proc_macro_hack::proc_macro_hack;
 use quote::{quote, ToTokens};
 use std::path::{Path, PathBuf};
 use syn::{
@@ -109,7 +108,7 @@ impl Parse for Args {
 	}
 }
 
-#[proc_macro_hack]
+#[proc_macro]
 pub fn git_version(input: TokenStream) -> TokenStream {
 	let args = parse_macro_input!(input as Args);
 

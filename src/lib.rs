@@ -13,8 +13,6 @@
 //! These macros do not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-use proc_macro_hack::proc_macro_hack;
-
 /// Get the git version for the source code.
 ///
 /// The following (named) arguments can be given:
@@ -48,7 +46,6 @@ use proc_macro_hack::proc_macro_hack;
 /// # use git_version::git_version;
 /// const VERSION: &str = git_version!(prefix = "git:", cargo_prefix = "cargo:", fallback = "unknown");
 /// ```
-#[proc_macro_hack]
 pub use git_version_macro::git_version;
 
 /// Run `git describe` at compile time with custom flags.
