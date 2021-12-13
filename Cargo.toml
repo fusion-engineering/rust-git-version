@@ -16,7 +16,6 @@ edition = "2018"
 readme = "README.md"
 
 [dependencies]
-proc-macro-hack = "0.5"
 git-version-macro = { version = "=0.3.5", path = "git-version-macro" }
 
 [workspace]
