@@ -3,8 +3,9 @@
 //! Embed git information in your code at compile-time.
 //!
 //! ```
-//! use git_version::git_version;
+//! use git_version::{git_version, git_version_count};
 //! const GIT_VERSION: &str = git_version!();
+//! const GIT_VERSION_COUNT: &str = git_version_count!();
 //! ```
 //!
 //! The version number will have a `-modified` suffix if your git worktree had
@@ -12,8 +13,8 @@
 //!
 //! These macros do not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
-
-pub use git_version_macro::git_version;
+//!
+pub use git_version_macro::{git_version, git_version_count};
 
 /// Run `git describe` at compile time with custom flags.
 ///
