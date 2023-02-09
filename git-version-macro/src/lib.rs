@@ -28,20 +28,25 @@ fn canonicalize_path(path: &Path) -> syn::Result<String> {
 		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
 		.into_os_string()
 		.into_string()
-		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))?
-	)
+		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))?)
 }
 
 /// Create a token stream representing dependencies on the git state.
-fn git_dependencies() -> syn::Result<TokenStream2> {
+fn git_dependencies(deps: Vec<String>) -> syn::Result<TokenStream2> {
 	let git_dir = git_dir_cwd().map_err(|e| error!("failed to determine .git directory: {}", e))?;
 
-	let deps: Vec<_> = ["logs/HEAD", "index"].iter().flat_map(|&file| {
-		canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e|  {
-			eprintln!("Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.", e);
-			None
+	let deps: Vec<_> = deps
+		.iter()
+		.flat_map(|file| {
+			canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e| {
+				eprintln!(
+					"Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.",
+					e
+				);
+				None
+			})
 		})
-	}).collect();
+		.collect();
 
 	Ok(quote! {
 		#( include_bytes!(#deps); )*
@@ -51,6 +56,7 @@ fn git_dependencies() -> syn::Result<TokenStream2> {
 #[derive(Default)]
 struct Args {
 	git_args: Option<Punctuated<LitStr, Comma>>,
+	git_dependencies: Option<Punctuated<LitStr, Comma>>,
 	prefix: Option<Expr>,
 	suffix: Option<Expr>,
 	cargo_prefix: Option<Expr>,
@@ -62,7 +68,9 @@ impl Parse for Args {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let mut result = Args::default();
 		loop {
-			if input.is_empty() { break; }
+			if input.is_empty() {
+				break;
+			}
 			let ident: Ident = input.parse()?;
 			let _: Eq = input.parse()?;
 			let check_dup = |dup: bool| {
@@ -78,6 +86,12 @@ impl Parse for Args {
 					let content;
 					bracketed!(content in input);
 					result.git_args = Some(Punctuated::parse_terminated(&content)?);
+				}
+				"git_deps" => {
+					check_dup(result.git_dependencies.is_some())?;
+					let content;
+					bracketed!(content in input);
+					result.git_dependencies = Some(Punctuated::parse_terminated(&content)?);
 				}
 				"prefix" => {
 					check_dup(result.prefix.is_some())?;
@@ -101,7 +115,9 @@ impl Parse for Args {
 				}
 				x => Err(error!("Unexpected argument name `{}`", x))?,
 			}
-			if input.is_empty() { break; }
+			if input.is_empty() {
+				break;
+			}
 			let _: Comma = input.parse()?;
 		}
 		Ok(result)
@@ -156,14 +172,18 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let git_args = args.git_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
-		|list| list.iter().map(|x| x.value()).collect()
+		|list| list.iter().map(|x| x.value()).collect(),
+	);
+	let git_deps = args.git_dependencies.map_or_else(
+		|| vec!["logs/HEAD".to_string(), "index".to_string()],
+		|list| list.iter().map(|x| x.value()).collect(),
 	);
 
 	let cargo_fallback = args.cargo_prefix.is_some() || args.cargo_suffix.is_some();
 
 	match describe_cwd(&git_args) {
 		Ok(version) => {
-			let dependencies = git_dependencies()?;
+			let dependencies = git_dependencies(git_deps)?;
 			let prefix = args.prefix.iter();
 			let suffix = args.suffix;
 			Ok(quote!({
@@ -175,20 +195,14 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 			if let Ok(version) = std::env::var("CARGO_PKG_VERSION") {
 				let prefix = args.cargo_prefix.iter();
 				let suffix = args.cargo_suffix;
-				Ok(quote!(
-					concat!(#(#prefix,)* #version, #suffix)
-				))
+				Ok(quote!(concat!(#(#prefix,)* #version, #suffix)))
 			} else if let Some(fallback) = args.fallback {
 				Ok(fallback.to_token_stream())
 			} else {
 				Err(error!("Unable to get git or cargo version"))
 			}
 		}
-		Err(_) if args.fallback.is_some() => {
-			Ok(args.fallback.to_token_stream())
-		}
-		Err(e) => {
-			Err(error!("{}", e))
-		}
+		Err(_) if args.fallback.is_some() => Ok(args.fallback.to_token_stream()),
+		Err(e) => Err(error!("{}", e)),
 	}
 }
