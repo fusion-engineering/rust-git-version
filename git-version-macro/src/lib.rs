@@ -196,20 +196,27 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	}
 }
 
-/// Get the git version for the source code.
+/// Get the git version for submodules below the cargo project.
+///
+/// This is achieved by running `git foreach` in tandem with `git describe`.
+/// The arguments for both git commands are exposed as macro arguments.
+///
+/// The each line of text output for this macro will be formatted as follows:
+/// ```bash
+/// relative/path/to/submodule : {prefix}{git_describe_output_for_submodule}{suffix}
+/// ```
 ///
 /// The following (named) arguments can be given:
 ///
-/// - `args`: The arguments to call `git describe` with.
+/// - `foreach_args`: The arguments to call `git submodule foreach` with.
+///   Default: `args = ["--quiet", "--recursive"]`
+///
+/// - `describe_args`: The arguments to call `git describe` with.
 ///   Default: `args = ["--always", "--dirty=-modified"]`
 ///
 /// - `prefix`, `suffix`:
-///   The git version will be prefixed/suffexed by these strings.
-///
-/// - `cargo_prefix`, `cargo_suffix`:
-///   If either is given, Cargo's version (given by the CARGO_PKG_VERSION
-///   environment variable) will be used if git fails instead of giving an
-///   error. It will be prefixed/suffixed by the given strings.
+///   The git version for each submodule will be prefixed/suffixed
+///   by these strings.
 ///
 /// - `fallback`:
 ///   If all else fails, this string will be given instead of reporting an
@@ -217,17 +224,17 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 ///
 /// # Examples
 ///
-/// ```ignore
-/// const VERSION: &str = git_version!();
 /// ```
-///
-/// ```ignore
-/// const VERSION: &str = git_version!(args = ["--abbrev=40", "--always"]);
+/// const VERSION: &str = git_version_modules!();
 /// ```
 ///
 /// ```
-/// # use git_version::git_version;
-/// const VERSION: &str = git_version!(prefix = "git:", cargo_prefix = "cargo:", fallback = "unknown");
+/// const VERSION: &str = git_version_modules!(describe_args = ["--abbrev=40", "--always"]);
+/// ```
+///
+/// ```
+/// # use git_version::git_version_modules;
+/// const VERSION: &str = git_version_modules!(prefix = "git:", cargo_prefix = "cargo:", fallback = "unknown");
 /// ```
 #[proc_macro]
 pub fn git_version_modules(input: TokenStream) -> TokenStream {
