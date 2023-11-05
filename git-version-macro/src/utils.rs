@@ -4,7 +4,7 @@ use std::process::Command;
 
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
-	if input.len() > 0 && input[input.len() - 1] == b'\n' {
+	if !input.is_empty() && input[input.len() - 1] == b'\n' {
 		input.pop();
 	}
 	input
@@ -16,12 +16,23 @@ where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
-	let cmd = Command::new("git")
-		.arg("describe")
-		.args(args)
-		.output()?;
+	let cmd = Command::new("git").arg("describe").args(args).output()?;
 
 	let output = verbose_command_error("git describe", cmd)?;
+	let output = strip_trailing_newline(output.stdout);
+
+	Ok(String::from_utf8_lossy(&output).to_string())
+}
+
+/// Run `git describe` for submodules in the current working directory with custom flags to get version information from git.
+pub fn describe_modules<I, S>(args: I) -> std::io::Result<String>
+where
+	I: IntoIterator<Item = S>,
+	S: AsRef<OsStr>,
+{
+	let cmd = Command::new("git").args(args).output()?;
+
+	let output = verbose_command_error("git submodule", cmd)?;
 	let output = strip_trailing_newline(output.stdout);
 
 	Ok(String::from_utf8_lossy(&output).to_string())
@@ -30,9 +41,7 @@ where
 /// Get the git directory for the current working directory.
 pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
 	// Run git rev-parse --git-dir, and capture standard output.
-	let cmd = Command::new("git")
-		.args(&["rev-parse", "--git-dir"])
-		.output()?;
+	let cmd = Command::new("git").args(["rev-parse", "--git-dir"]).output()?;
 
 	let output = verbose_command_error("git rev-parse --git-dir", cmd)?;
 	let output = strip_trailing_newline(output.stdout);
