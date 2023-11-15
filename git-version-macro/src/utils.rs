@@ -47,11 +47,12 @@ pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
 #[test]
 fn test_git_dir() {
 	use std::path::Path;
+	use assert2::{assert, let_assert};
 
-	assert_eq!(
-		git_dir_cwd().unwrap().canonicalize().unwrap(),
-		Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize().unwrap()
-	);
+	let_assert!(Ok(git_dir) = git_dir_cwd());
+	let_assert!(Ok(git_dir) = git_dir.canonicalize());
+	let_assert!(Ok(expected) = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize());
+	assert!(git_dir == expected);
 }
 
 /// Check if a command ran successfully, and if not, return a verbose error.

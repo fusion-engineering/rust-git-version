@@ -22,3 +22,6 @@ proc-macro = true
 quote = "1.0"
 proc-macro2 = "1.0"
 syn = "2.0"
+
+[dev-dependencies]
+assert2 = "0.3.11"
