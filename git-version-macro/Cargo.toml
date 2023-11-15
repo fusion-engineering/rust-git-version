@@ -1,6 +1,6 @@
 [package]
 name = "git-version-macro"
-version = "0.3.7"
+version = "0.3.8"
 authors = [
 	"David Roundy <daveroundy@gmail.com>",
 	"Maarten de Vries <maarten@de-vri.es>",
@@ -25,3 +25,4 @@ syn = "2.0"
 
 [dev-dependencies]
 assert2 = "0.3.11"
+git-version = { path = ".." }

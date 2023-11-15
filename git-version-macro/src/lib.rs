@@ -122,11 +122,13 @@ impl Parse for Args {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```
+/// # use git_version::git_version;
 /// const VERSION: &str = git_version!();
 /// ```
 ///
-/// ```ignore
+/// ```
+/// # use git_version::git_version;
 /// const VERSION: &str = git_version!(args = ["--abbrev=40", "--always"]);
 /// ```
 ///
