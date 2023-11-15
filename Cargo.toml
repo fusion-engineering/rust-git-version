@@ -1,7 +1,7 @@
 [package]
 name = "git-version"
 description = "Compile the git version (tag name, or hash otherwise) and dirty state into your program."
-version = "0.3.5"
+version = "0.3.6"
 authors = [
 	"Mara Bos <m-ou.se@m-ou.se>",
 	"Maarten de Vries <maarten@de-vri.es>",
@@ -16,7 +16,7 @@ edition = "2018"
 readme = "README.md"
 
 [dependencies]
-git-version-macro = { version = "=0.3.5", path = "git-version-macro" }
+git-version-macro = { version = "=0.3.6", path = "git-version-macro" }
 
 [workspace]
 members = ["git-version-macro"]

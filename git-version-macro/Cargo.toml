@@ -1,6 +1,6 @@
 [package]
 name = "git-version-macro"
-version = "0.3.5"
+version = "0.3.6"
 authors = [
 	"David Roundy <daveroundy@gmail.com>",
 	"Maarten de Vries <maarten@de-vri.es>",
