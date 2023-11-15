@@ -2,46 +2,82 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Run `git describe` for the current working directory with custom flags to get version information from git.
+pub fn describe_cwd<I, S>(args: I) -> Result<String, String>
+where
+	I: IntoIterator<Item = S>,
+	S: AsRef<OsStr>,
+{
+	run_git("git describe", Command::new("git").arg("describe").args(args))
+}
+
+/// Get the git directory for the current working directory.
+pub fn git_dir_cwd() -> Result<PathBuf, String> {
+	let path = run_git("git rev-parse", Command::new("git").args(["rev-parse", "--git-dir"]))?;
+	Ok(PathBuf::from(path))
+}
+
+fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
+	let output = command
+		.stdout(std::process::Stdio::piped())
+		.stderr(std::process::Stdio::piped())
+		.spawn()
+		.map_err(|e| {
+			if e.kind() == std::io::ErrorKind::NotFound {
+				"Command `git` not found: is git installed?".to_string()
+			} else {
+				format!("Failed to run `{}`: {}", program, e)
+			}
+		})?
+		.wait_with_output()
+		.map_err(|e| format!("Failed to wait for `{}`: {}", program, e))?;
+
+	let output = collect_output(program, output)?;
+	let output = strip_trailing_newline(output);
+	let output = String::from_utf8(output)
+		.map_err(|_| format!("Failed to parse output of `{}`: output contains invalid UTF-8", program))?;
+	Ok(output)
+}
+
+/// Check if a command ran successfully, and if not, return a verbose error.
+fn collect_output(program: &str, output: std::process::Output) -> Result<Vec<u8>, String> {
+	// If the command succeeded, just return the output as is.
+	if output.status.success() {
+		return Ok(output.stdout);
+
+	// If the command terminated with non-zero exit code, return an error.
+	} else if let Some(status) = output.status.code() {
+		// Include the first line of stderr in the error message, if it's valid UTF-8 and not empty.
+		let message = output.stderr.split(|c| *c == b'\n')
+			.next()
+			.and_then(|x| std::str::from_utf8(x).ok())
+			.filter(|x| !x.is_empty());
+		if let Some(message) = message {
+			return Err(format!("{} exited with status {}: {}", program, status, message));
+		} else {
+			return Err(format!("{} exited with status {}", program, status));
+		}
+	}
+
+	// The command was killed by a signal.
+	#[cfg(unix)]
+	{
+		use std::os::unix::process::ExitStatusExt;
+		if let Some(signal) = output.status.signal() {
+			// Include the signal number on Unix.
+			return Err(format!("{} killed by signal {}", program, signal));
+		}
+	}
+
+	Err(format!("{} exitted with error", program))
+}
+
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 	if input.last().copied() == Some(b'\n') {
 		input.pop();
 	}
 	input
-}
-
-/// Run `git describe` for the current working directory with custom flags to get version information from git.
-pub fn describe_cwd<I, S>(args: I) -> std::io::Result<String>
-where
-	I: IntoIterator<Item = S>,
-	S: AsRef<OsStr>,
-{
-	let cmd = Command::new("git")
-		.arg("describe")
-		.args(args)
-		.output()?;
-
-	let output = verbose_command_error("git describe", cmd)?;
-	let output = strip_trailing_newline(output.stdout);
-
-	Ok(String::from_utf8_lossy(&output).to_string())
-}
-
-/// Get the git directory for the current working directory.
-pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
-	// Run git rev-parse --git-dir, and capture standard output.
-	let cmd = Command::new("git")
-		.args(["rev-parse", "--git-dir"])
-		.output()?;
-
-	let output = verbose_command_error("git rev-parse --git-dir", cmd)?;
-	let output = strip_trailing_newline(output.stdout);
-
-	// Parse the output as UTF-8.
-	let path = std::str::from_utf8(&output)
-		.map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "invalid UTF-8 in path to .git directory"))?;
-
-	Ok(PathBuf::from(path))
 }
 
 #[test]
@@ -53,51 +89,4 @@ fn test_git_dir() {
 	let_assert!(Ok(git_dir) = git_dir.canonicalize());
 	let_assert!(Ok(expected) = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize());
 	assert!(git_dir == expected);
-}
-
-/// Check if a command ran successfully, and if not, return a verbose error.
-fn verbose_command_error<C>(command: C, output: std::process::Output) -> std::io::Result<std::process::Output>
-where
-	C: std::fmt::Display,
-{
-	// If the command succeeded, just return the output as is.
-	if output.status.success() {
-		Ok(output)
-
-	// If the command terminated with non-zero exit code, return an error.
-	} else if let Some(status) = output.status.code() {
-		// Include the first line of stderr in the error message, if it's valid UTF-8 and not empty.
-		let message = output.stderr.splitn(2, |c| *c == b'\n').next().unwrap();
-		if let Some(message) = String::from_utf8(message.to_vec()).ok().filter(|x| !x.is_empty()) {
-			Err(std::io::Error::new(
-				std::io::ErrorKind::Other,
-				format!("{} failed with status {}: {}", command, status, message),
-			))
-		} else {
-			Err(std::io::Error::new(
-				std::io::ErrorKind::Other,
-				format!("{} failed with status {}", command, status),
-			))
-		}
-
-	// The command was killed by a signal.
-	} else {
-		// Include the signal number on Unix.
-		#[cfg(target_family = "unix")]
-		{
-			use std::os::unix::process::ExitStatusExt;
-			let signal = output.status.signal().unwrap();
-			Err(std::io::Error::new(
-				std::io::ErrorKind::Other,
-				format!("{} killed by signal {}", command, signal),
-			))
-		}
-		#[cfg(not(target_family = "unix"))]
-		{
-			Err(std::io::Error::new(
-				std::io::ErrorKind::Other,
-				format!("{} killed by signal", command),
-			))
-		}
-	}
 }

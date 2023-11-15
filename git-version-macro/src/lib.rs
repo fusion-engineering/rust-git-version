@@ -2,14 +2,10 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use std::path::{Path, PathBuf};
-use syn::{
-	bracketed,
-	parse::{Parse, ParseStream},
-	parse_macro_input,
-	punctuated::Punctuated,
-	token::{Comma, Eq},
-	Expr, Ident, LitStr,
-};
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
+use syn::token::{Comma, Eq};
+use syn::{Expr, Ident, LitStr};
 
 mod utils;
 use self::utils::{describe_cwd, git_dir_cwd};
@@ -73,7 +69,7 @@ impl Parse for Args {
 				"args" => {
 					check_dup(result.git_args.is_some())?;
 					let content;
-					bracketed!(content in input);
+					syn::bracketed!(content in input);
 					result.git_args = Some(Punctuated::parse_terminated(&content)?);
 				}
 				"prefix" => {
@@ -140,7 +136,7 @@ impl Parse for Args {
 /// ```
 #[proc_macro]
 pub fn git_version(input: TokenStream) -> TokenStream {
-	let args = parse_macro_input!(input as Args);
+	let args = syn::parse_macro_input!(input as Args);
 
 	let tokens = match git_version_impl(args) {
 		Ok(x) => x,
