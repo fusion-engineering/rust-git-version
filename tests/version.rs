@@ -3,7 +3,7 @@ use git_version::{git_describe, git_version};
 #[test]
 fn git_describe_is_right() {
 	let vec = std::process::Command::new("git")
-		.args(&["describe", "--always", "--dirty=-modified"])
+		.args(["describe", "--always", "--dirty=-modified"])
 		.output()
 		.expect("failed to execute git")
 		.stdout;

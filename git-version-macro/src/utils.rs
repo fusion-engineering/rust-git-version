@@ -4,7 +4,7 @@ use std::process::Command;
 
 /// Remove a trailing newline from a byte string.
 fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
-	if input.len() > 0 && input[input.len() - 1] == b'\n' {
+	if input.last().copied() == Some(b'\n') {
 		input.pop();
 	}
 	input
@@ -31,7 +31,7 @@ where
 pub fn git_dir_cwd() -> std::io::Result<PathBuf> {
 	// Run git rev-parse --git-dir, and capture standard output.
 	let cmd = Command::new("git")
-		.args(&["rev-parse", "--git-dir"])
+		.args(["rev-parse", "--git-dir"])
 		.output()?;
 
 	let output = verbose_command_error("git rev-parse --git-dir", cmd)?;

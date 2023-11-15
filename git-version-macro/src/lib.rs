@@ -23,13 +23,12 @@ macro_rules! error {
 }
 
 fn canonicalize_path(path: &Path) -> syn::Result<String> {
-	Ok(path
+	path
 		.canonicalize()
 		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
 		.into_os_string()
 		.into_string()
-		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))?
-	)
+		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))
 }
 
 /// Create a token stream representing dependencies on the git state.
