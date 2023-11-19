@@ -1,5 +1,4 @@
 use std::ffi::OsStr;
-use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -84,32 +83,12 @@ fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 }
 
 /// Run `git describe` for submodules in the current working directory with custom flags to get version information from git.
-pub fn describe_modules<I, S>(args: I, prefix: String, suffix: String) -> std::io::Result<Vec<(String, String)>>
+pub fn describe_modules<I, S>(args: I) -> Result<String, String>
 where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
-	let cmd = Command::new("git").args(args).output()?;
-
-	let cmd_output = verbose_command_error("git submodule", cmd)?;
-	let cmd_output = strip_trailing_newline(cmd_output.stdout);
-
-	let mut output: Vec<(String, String)> = vec![];
-
-	for line in String::from_utf8_lossy(&cmd_output).to_string().split("\n") {
-		let line_split: Vec<&str> = line.split(':').collect();
-
-		if line_split.len() != 2 {
-			return Err(Error::new(
-				ErrorKind::Other,
-				format!("Git command returned unexpected result: {line}"),
-			));
-		}
-		output.push((line_split[0].to_string(), line_split[1].to_string()));
-		// output.push(line.split(":").collect());
-	}
-
-	Ok(output)
+	run_git("git submodule", Command::new("git").args(args))
 }
 
 #[test]

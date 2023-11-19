@@ -196,18 +196,17 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// This is achieved by running `git foreach` in tandem with `git describe`.
 /// The arguments for both git commands are exposed as macro arguments.
 ///
-/// The each line of text output for this macro will be formatted as follows:
-/// ```bash
-/// relative/path/to/submodule : {prefix}{git_describe_output_for_submodule}{suffix}
-/// ```
+/// This macro expands to a 2D array that looks like the following:
+///
+/// `[["relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}"]]`
 ///
 /// The following (named) arguments can be given:
 ///
-/// - `foreach_args`: The arguments to call `git submodule foreach` with.
-///   Default: `args = ["--quiet", "--recursive"]`
+/// - `foreach_args`: The arguments to call `git submodule foreach` with. Default: `foreach_args = ["--quiet", "--recursive"]`
+///     - NOTE: `"--quiet"` is a required argument. If `"--quiet"` is not in the list of provided args, it will be added automatically.
 ///
 /// - `describe_args`: The arguments to call `git describe` with.
-///   Default: `args = ["--always", "--dirty=-modified"]`
+///   Default: `describe_args = ["--always", "--dirty=-modified"]`
 ///
 /// - `prefix`, `suffix`:
 ///   The git version for each submodule will be prefixed/suffixed
@@ -220,20 +219,20 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// # Examples
 ///
 /// ```
-/// const VERSION: &str = git_version_modules!();
+/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!();
 /// ```
 ///
 /// ```
-/// const VERSION: &str = git_version_modules!(describe_args = ["--abbrev=40", "--always"]);
+/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!(describe_args = ["--abbrev=40", "--always"]);
 /// ```
 ///
 /// ```
 /// # use git_version::git_version_modules;
-/// const VERSION: &str = git_version_modules!(prefix = "git:", cargo_prefix = "cargo:", fallback = "unknown");
+/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!(prefix = "git:", fallback = "unknown");
 /// ```
 #[proc_macro]
 pub fn git_version_modules(input: TokenStream) -> TokenStream {
-	let args = parse_macro_input!(input as describe_submodules::GitModArgs);
+	let args = syn::parse_macro_input!(input as describe_submodules::GitModArgs);
 
 	let tokens = match describe_submodules::git_version_modules_impl(args) {
 		Ok(x) => x,

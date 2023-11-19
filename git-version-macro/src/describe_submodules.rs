@@ -3,7 +3,6 @@ use crate::git_dependencies;
 use crate::utils::describe_modules;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use syn::TypeTuple;
 use syn::{
 	bracketed,
 	parse::{Parse, ParseStream},
@@ -90,6 +89,10 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 		|list| list.iter().map(|x| x.value()).collect(),
 	);
 
+	if !git_foreach_args.contains(&"--quiet".to_string()) {
+		git_foreach_args.push("--quiet".to_string())
+	}
+
 	let prefix = match args.prefix {
 		Some(x) => x.value(),
 		_ => "".to_string(),
@@ -105,16 +108,30 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 	git_args.append(&mut git_foreach_args);
 	git_args.push(descibe_args);
 
-	match describe_modules(&git_args, prefix, suffix) {
+	match describe_modules(&git_args) {
 		Ok(version) => {
 			let dependencies = git_dependencies()?;
-			let mut version_tokenable: Vec<(&str, &str)> = vec![];
-			for line in version.into_iter() {
-				version_tokenable.push((line.0.as_str(), line.1.as_str()));
+
+			let mut output: Vec<Vec<String>> = vec![];
+			let newline_split = version.split('\n');
+
+			for line in newline_split {
+				let line = line.to_string();
+				let line_split: Vec<&str> = line.split(':').collect();
+				assert!(
+					line_split.len() == 2,
+					// NOTE: I Don't love this split, but I think I have protected against weirdness
+					// by adding the only arbitrary text allowed (prefix, suffix) after the split happens.
+					// so unless people are using colons in their tag names, it should be fine.
+					"Found an unexpected colon ':' in git describe output - {}",
+					version
+				);
+				output.push(vec![line_split[0].to_string(), format!("{}{}{}", prefix, line_split[1], suffix)])
 			}
+
 			Ok(quote!({
 				#dependencies;
-				[#(#version_tokenable),*];
+				[#([#(#output),*]),*]
 			}))
 		}
 		Err(_) if args.fallback.is_some() => Ok(args.fallback.to_token_stream()),

@@ -22,5 +22,5 @@ fn test_modules_macro_gives_expected_output() {
 		suffix = "-suff",
 		describe_args = ["--always", "--dirty=-modified", "--tags"]
 	);
-	println!("{module_versions}");
+	println!("{module_versions:?}");
 }
