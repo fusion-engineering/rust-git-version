@@ -1,8 +1,12 @@
 extern crate proc_macro;
+use crate::canonicalize_path;
 use crate::git_dependencies;
-use crate::utils::describe_modules;
+use crate::utils::run_git;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
+use std::ffi::OsStr;
+use std::path::Path;
+use std::process::Command;
 use syn::{
 	bracketed,
 	parse::{Parse, ParseStream},
@@ -20,7 +24,6 @@ macro_rules! error {
 #[derive(Default)]
 pub(crate) struct GitModArgs {
 	describe_args: Option<Punctuated<LitStr, Comma>>,
-	foreach_args: Option<Punctuated<LitStr, Comma>>,
 	prefix: Option<LitStr>,
 	suffix: Option<LitStr>,
 	fallback: Option<Expr>,
@@ -49,12 +52,6 @@ impl Parse for GitModArgs {
 					bracketed!(content in input);
 					result.describe_args = Some(Punctuated::parse_terminated(&content)?);
 				}
-				"foreach_args" => {
-					check_dup(result.foreach_args.is_some())?;
-					let content;
-					bracketed!(content in input);
-					result.foreach_args = Some(Punctuated::parse_terminated(&content)?);
-				}
 				"prefix" => {
 					check_dup(result.prefix.is_some())?;
 					result.prefix = Some(input.parse()?);
@@ -79,19 +76,23 @@ impl Parse for GitModArgs {
 }
 
 pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
+	let modules = match get_modules() {
+		Ok(x) => x,
+		Err(err) => return Err(error!("{}", err)),
+	};
+
+	let mut describe_paths: Vec<(String, String)> = vec![];
+
+	for path in modules.into_iter() {
+		let path_obj = Path::new(&path);
+		let path_obj = canonicalize_path(&path_obj)?;
+		describe_paths.push((path, path_obj));
+	}
+
 	let git_describe_args = args.describe_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
 		|list| list.iter().map(|x| x.value()).collect(),
 	);
-
-	let mut git_foreach_args = args.foreach_args.map_or_else(
-		|| vec!["--quiet".to_string(), "--recursive".to_string()],
-		|list| list.iter().map(|x| x.value()).collect(),
-	);
-
-	if !git_foreach_args.contains(&"--quiet".to_string()) {
-		git_foreach_args.push("--quiet".to_string())
-	}
 
 	let prefix = match args.prefix {
 		Some(x) => x.value(),
@@ -102,39 +103,70 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 		_ => "".to_string(),
 	};
 
-	let descibe_args = format!("echo $displaypath:`git describe {}`", git_describe_args.join(" "));
-
-	let mut git_args: Vec<String> = vec!["submodule".to_string(), "foreach".to_string()];
-	git_args.append(&mut git_foreach_args);
-	git_args.push(descibe_args);
-
-	match describe_modules(&git_args) {
+	match describe_modules(describe_paths, &git_describe_args, prefix, suffix) {
 		Ok(version) => {
 			let dependencies = git_dependencies()?;
-
-			let mut output: Vec<Vec<String>> = vec![];
-			let newline_split = version.split('\n');
-
-			for line in newline_split {
-				let line = line.to_string();
-				let line_split: Vec<&str> = line.split(':').collect();
-				assert!(
-					line_split.len() == 2,
-					// NOTE: I Don't love this split, but I think I have protected against weirdness
-					// by adding the only arbitrary text allowed (prefix, suffix) after the split happens.
-					// so unless people are using colons in their tag names, it should be fine.
-					"Found an unexpected colon ':' in git describe output - {}",
-					version
-				);
-				output.push(vec![line_split[0].to_string(), format!("{}{}{}", prefix, line_split[1], suffix)])
-			}
-
+			let i = (0..version.len()).map(syn::Index::from);
 			Ok(quote!({
 				#dependencies;
-				[#([#(#output),*]),*]
+
+				#[derive(Debug)]
+				struct SubmoduleVersion {
+					path: String,
+					version: String,
+				};
+
+
+				[#(SubmoduleVersion{
+					path: version[#i].0,
+					version: version[#i].1
+				}),*]
+
 			}))
 		}
 		Err(_) if args.fallback.is_some() => Ok(args.fallback.to_token_stream()),
 		Err(e) => Err(error!("{}", e)),
 	}
+}
+
+/// Run `git submodule foreach` command to discover submodules in the project.
+pub fn get_modules() -> Result<Vec<String>, String> {
+	let mut args: Vec<String> = "submodule foreach --quiet --recursive"
+		.to_string()
+		.split(" ")
+		.map(|x| x.to_string())
+		.collect();
+
+	args.push("echo $displaypath".to_string());
+
+	let result = run_git("git submodule", Command::new("git").args(args))?;
+
+	Ok(result.split("\n").map(|x| x.to_string()).collect())
+}
+
+/// Run `git describe` for each submodule to
+pub fn describe_modules<I, S>(
+	paths: Vec<(String, String)>,
+	describe_args: I,
+	prefix: String,
+	suffix: String,
+) -> Result<Vec<(String, String)>, String>
+where
+	I: IntoIterator<Item = S> + Clone,
+	S: AsRef<OsStr>,
+{
+	let mut output: Vec<(String, String)> = vec![];
+
+	for (rel_path, abs_path) in paths.into_iter() {
+		let result = run_git(
+			"git describe",
+			Command::new("git")
+				.current_dir(abs_path)
+				.arg("describe")
+				.args(describe_args.clone()),
+		)?;
+		output.push((rel_path, format!("{}{}{}", prefix, result, suffix)));
+	}
+
+	Ok(output)
 }

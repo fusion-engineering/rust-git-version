@@ -17,7 +17,7 @@ pub fn git_dir_cwd() -> Result<PathBuf, String> {
 	Ok(PathBuf::from(path))
 }
 
-fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
+pub(crate) fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
 	let output = command
 		.stdout(std::process::Stdio::piped())
 		.stderr(std::process::Stdio::piped())
@@ -80,15 +80,6 @@ fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 		input.pop();
 	}
 	input
-}
-
-/// Run `git describe` for submodules in the current working directory with custom flags to get version information from git.
-pub fn describe_modules<I, S>(args: I) -> Result<String, String>
-where
-	I: IntoIterator<Item = S>,
-	S: AsRef<OsStr>,
-{
-	run_git("git submodule", Command::new("git").args(args))
 }
 
 #[test]
