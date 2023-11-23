@@ -23,7 +23,7 @@ macro_rules! error {
 
 #[derive(Default)]
 pub(crate) struct GitModArgs {
-	describe_args: Option<Punctuated<LitStr, Comma>>,
+	args: Option<Punctuated<LitStr, Comma>>,
 	prefix: Option<LitStr>,
 	suffix: Option<LitStr>,
 	fallback: Option<Expr>,
@@ -46,11 +46,11 @@ impl Parse for GitModArgs {
 				}
 			};
 			match ident.to_string().as_str() {
-				"describe_args" => {
-					check_dup(result.describe_args.is_some())?;
+				"args" => {
+					check_dup(result.args.is_some())?;
 					let content;
 					bracketed!(content in input);
-					result.describe_args = Some(Punctuated::parse_terminated(&content)?);
+					result.args = Some(Punctuated::parse_terminated(&content)?);
 				}
 				"prefix" => {
 					check_dup(result.prefix.is_some())?;
@@ -85,11 +85,11 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 
 	for path in modules.into_iter() {
 		let path_obj = Path::new(&path);
-		let path_obj = canonicalize_path(&path_obj)?;
+		let path_obj = canonicalize_path(path_obj)?;
 		describe_paths.push((path, path_obj));
 	}
 
-	let git_describe_args = args.describe_args.map_or_else(
+	let git_describe_args = args.args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
 		|list| list.iter().map(|x| x.value()).collect(),
 	);
@@ -104,9 +104,10 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 	};
 
 	match describe_modules(describe_paths, &git_describe_args, prefix, suffix) {
-		Ok(version) => {
+		Ok(result) => {
 			let dependencies = git_dependencies()?;
-			let i = (0..version.len()).map(syn::Index::from);
+			let (paths, versions) = result;
+
 			Ok(quote!({
 				#dependencies;
 
@@ -116,11 +117,7 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 					version: String,
 				};
 
-
-				[#(SubmoduleVersion{
-					path: version[#i].0,
-					version: version[#i].1
-				}),*]
+				[#(SubmoduleVersion{path:#paths.to_string(), version:#versions.to_string()}),*]
 
 			}))
 		}
@@ -133,7 +130,7 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 pub fn get_modules() -> Result<Vec<String>, String> {
 	let mut args: Vec<String> = "submodule foreach --quiet --recursive"
 		.to_string()
-		.split(" ")
+		.split(' ')
 		.map(|x| x.to_string())
 		.collect();
 
@@ -141,7 +138,7 @@ pub fn get_modules() -> Result<Vec<String>, String> {
 
 	let result = run_git("git submodule", Command::new("git").args(args))?;
 
-	Ok(result.split("\n").map(|x| x.to_string()).collect())
+	Ok(result.split('\n').map(|x| x.to_string()).collect())
 }
 
 /// Run `git describe` for each submodule to
@@ -150,12 +147,13 @@ pub fn describe_modules<I, S>(
 	describe_args: I,
 	prefix: String,
 	suffix: String,
-) -> Result<Vec<(String, String)>, String>
+) -> Result<(Vec<String>, Vec<String>), String>
 where
 	I: IntoIterator<Item = S> + Clone,
 	S: AsRef<OsStr>,
 {
-	let mut output: Vec<(String, String)> = vec![];
+	let mut paths_out: Vec<String> = vec![];
+	let mut versions: Vec<String> = vec![];
 
 	for (rel_path, abs_path) in paths.into_iter() {
 		let result = run_git(
@@ -165,8 +163,9 @@ where
 				.arg("describe")
 				.args(describe_args.clone()),
 		)?;
-		output.push((rel_path, format!("{}{}{}", prefix, result, suffix)));
+		paths_out.push(rel_path);
+		versions.push(format!("{}{}{}", prefix, result, suffix))
 	}
 
-	Ok(output)
+	Ok((paths_out, versions))
 }

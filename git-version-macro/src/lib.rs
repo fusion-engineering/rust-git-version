@@ -194,18 +194,15 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// Get the git version for submodules below the cargo project.
 ///
 /// This is achieved by running `git foreach` in tandem with `git describe`.
-/// The arguments for both git commands are exposed as macro arguments.
+/// The arguments for `git describe` are exposed as macro arguments.
 ///
-/// This macro expands to a 2D array that looks like the following:
+/// This macro expands to an array of SubmoduleVersion structs that are automatically imported where the macro is used:
 ///
-/// `[["relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}"]]`
+/// `[SubmoduleVersion { path:"relative/path/to/submodule", version: "{prefix}{git_describe_output}{suffix}" }]`
 ///
 /// The following (named) arguments can be given:
 ///
-/// - `foreach_args`: The arguments to call `git submodule foreach` with. Default: `foreach_args = ["--quiet", "--recursive"]`
-///     - NOTE: `"--quiet"` is a required argument. If `"--quiet"` is not in the list of provided args, it will be added automatically.
-///
-/// - `describe_args`: The arguments to call `git describe` with.
+/// - `args`: The arguments to call `git describe` with.
 ///   Default: `describe_args = ["--always", "--dirty=-modified"]`
 ///
 /// - `prefix`, `suffix`:

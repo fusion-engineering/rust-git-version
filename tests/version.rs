@@ -20,7 +20,7 @@ fn test_modules_macro_gives_expected_output() {
 	let module_versions = git_version_modules!(
 		prefix = "pre-",
 		suffix = "-suff",
-		describe_args = ["--always", "--dirty=-modified", "--tags"]
+		args = ["--always", "--dirty=-modified", "--tags"]
 	);
-	println!("{module_versions:?}");
+	println!("{module_versions:#?}");
 }
