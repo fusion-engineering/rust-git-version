@@ -111,13 +111,7 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 			Ok(quote!({
 				#dependencies;
 
-				#[derive(Debug)]
-				struct SubmoduleVersion {
-					path: String,
-					version: String,
-				};
-
-				[#(SubmoduleVersion{path:#paths.to_string(), version:#versions.to_string()}),*]
+				[#((#paths, #versions)),*]
 
 			}))
 		}
@@ -127,7 +121,7 @@ pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStr
 }
 
 /// Run `git submodule foreach` command to discover submodules in the project.
-pub fn get_modules() -> Result<Vec<String>, String> {
+fn get_modules() -> Result<Vec<String>, String> {
 	let mut args: Vec<String> = "submodule foreach --quiet --recursive"
 		.to_string()
 		.split(' ')
@@ -142,7 +136,7 @@ pub fn get_modules() -> Result<Vec<String>, String> {
 }
 
 /// Run `git describe` for each submodule to
-pub fn describe_modules<I, S>(
+fn describe_modules<I, S>(
 	paths: Vec<(String, String)>,
 	describe_args: I,
 	prefix: String,
