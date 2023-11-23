@@ -196,14 +196,14 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// This is achieved by running `git foreach` in tandem with `git describe`.
 /// The arguments for `git describe` are exposed as macro arguments.
 ///
-/// This macro expands to an array of SubmoduleVersion structs that are automatically imported where the macro is used:
+/// This macro expands to an array of `(&str, &str)` tuples that look like the following:
 ///
-/// `[SubmoduleVersion { path:"relative/path/to/submodule", version: "{prefix}{git_describe_output}{suffix}" }]`
+/// `[("relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}")]`
 ///
 /// The following (named) arguments can be given:
 ///
 /// - `args`: The arguments to call `git describe` with.
-///   Default: `describe_args = ["--always", "--dirty=-modified"]`
+///   Default: `args = ["--always", "--dirty=-modified"]`
 ///
 /// - `prefix`, `suffix`:
 ///   The git version for each submodule will be prefixed/suffixed
@@ -216,16 +216,16 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// # Examples
 ///
 /// ```
-/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!();
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!();
 /// ```
 ///
 /// ```
-/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!(describe_args = ["--abbrev=40", "--always"]);
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(args = ["--abbrev=40", "--always"]);
 /// ```
 ///
 /// ```
 /// # use git_version::git_version_modules;
-/// const MODULE_VERSIONS: [[&str, 2], 4] = git_version_modules!(prefix = "git:", fallback = "unknown");
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(prefix = "git:", fallback = "unknown");
 /// ```
 #[proc_macro]
 pub fn git_version_modules(input: TokenStream) -> TokenStream {
