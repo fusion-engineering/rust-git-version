@@ -16,7 +16,6 @@ fn git_describe_is_right() {
 }
 
 #[test]
-#[ignore = "Remove this ignore when there are submodules in the project"]
 fn test_modules_macro_gives_expected_output() {
 	let vec = std::process::Command::new("git")
 		.args(["submodule", "foreach", "--quiet", "--recursive", "echo $displaypath"])
@@ -52,8 +51,5 @@ fn test_modules_macro_gives_expected_output() {
 		.collect::<Vec<(&str, &str)>>()
 		.into_boxed_slice();
 
-	assert_eq!(
-		*boxed_slice,
-		git_module_versions!(args = ["--always", "--dirty=-modified"], fallback = "no submodules")
-	);
+	assert_eq!(*boxed_slice, git_module_versions!(args = ["--always", "--dirty=-modified"]));
 }
