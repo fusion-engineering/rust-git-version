@@ -3,7 +3,7 @@ use crate::canonicalize_path;
 use crate::git_dependencies;
 use crate::utils::run_git;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::quote;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Command;
@@ -76,11 +76,12 @@ impl Parse for GitModArgs {
 }
 
 pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
-	let modules = match get_modules() {
+	let mut modules = match get_modules() {
 		Ok(x) => x,
 		Err(err) => return Err(error!("{}", err)),
 	};
-
+	modules.retain(|path| path != "");
+	println!("modules:{:?}", modules);
 	let mut describe_paths: Vec<(String, String)> = vec![];
 
 	for path in modules.into_iter() {
@@ -115,7 +116,7 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 
 			}))
 		}
-		Err(_) if args.fallback.is_some() => Ok(args.fallback.to_token_stream()),
+		Err(_) if args.fallback.is_some() => Ok(quote!([("fallback", args.fallback)])),
 		Err(e) => Err(error!("{}", e)),
 	}
 }

@@ -16,19 +16,22 @@ fn git_describe_is_right() {
 }
 
 #[test]
+#[ignore = "Remove this ignore when there are submodules in the project"]
 fn test_modules_macro_gives_expected_output() {
 	let vec = std::process::Command::new("git")
 		.args(["submodule", "foreach", "--quiet", "--recursive", "echo $displaypath"])
 		.output()
 		.expect("failed to execute git")
 		.stdout;
-	let submodules: Vec<String> = String::from_utf8(vec)
+	let mut submodules: Vec<String> = String::from_utf8(vec)
 		.expect("Failed to gather submodules for test")
 		.trim_end()
 		.to_string()
 		.split("\n")
 		.map(|str| str.to_string())
 		.collect();
+
+	submodules.retain(|path| path != "");
 
 	let mut expected_result: Vec<(String, String)> = vec![];
 	for submodule in submodules.into_iter() {
@@ -49,5 +52,8 @@ fn test_modules_macro_gives_expected_output() {
 		.collect::<Vec<(&str, &str)>>()
 		.into_boxed_slice();
 
-	assert_eq!(*boxed_slice, git_module_versions!(args = ["--always", "--dirty=-modified"]));
+	assert_eq!(
+		*boxed_slice,
+		git_module_versions!(args = ["--always", "--dirty=-modified"], fallback = "no submodules")
+	);
 }

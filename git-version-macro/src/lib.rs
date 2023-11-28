@@ -193,10 +193,12 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 
 /// Get the git version for submodules below the cargo project.
 ///
-/// This is achieved by running `git foreach` in tandem with `git describe`.
-/// The arguments for `git describe` are exposed as macro arguments.
+/// This macro will not infer type if there are no submodules in the project.
 ///
-/// This macro expands to an array of `(&str, &str)` tuples that look like the following:
+/// This macro expands to `[(&str, &str), N]` where `N` is the total number of
+/// submodules below the root of the project (evaluated recursively)
+///
+/// The format of the array is as follows:
 ///
 /// `[("relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}")]`
 ///
@@ -211,7 +213,8 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 ///
 /// - `fallback`:
 ///   If all else fails, this string will be given instead of reporting an
-///   error.
+///   error. This will yield the same type as if the macro was a success, but
+///   format will be `[("fallback", fallback_argument)]`
 ///
 /// # Examples
 ///
