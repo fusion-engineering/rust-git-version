@@ -75,7 +75,7 @@ impl Parse for GitModArgs {
 	}
 }
 
-pub(crate) fn git_version_modules_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
+pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
 	let modules = match get_modules() {
 		Ok(x) => x,
 		Err(err) => return Err(error!("{}", err)),
@@ -135,7 +135,7 @@ fn get_modules() -> Result<Vec<String>, String> {
 	Ok(result.split('\n').map(|x| x.to_string()).collect())
 }
 
-/// Run `git describe` for each submodule to
+/// Run `git describe` for each submodule to get the git version with the specified args.
 fn describe_modules<I, S>(
 	paths: Vec<(String, String)>,
 	describe_args: I,

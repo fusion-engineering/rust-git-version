@@ -228,10 +228,10 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(prefix = "git:", fallback = "unknown");
 /// ```
 #[proc_macro]
-pub fn git_version_modules(input: TokenStream) -> TokenStream {
+pub fn git_module_versions(input: TokenStream) -> TokenStream {
 	let args = syn::parse_macro_input!(input as describe_submodules::GitModArgs);
 
-	let tokens = match describe_submodules::git_version_modules_impl(args) {
+	let tokens = match describe_submodules::git_module_versions_impl(args) {
 		Ok(x) => x,
 		Err(e) => e.to_compile_error(),
 	};
