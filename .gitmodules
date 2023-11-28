@@ -1,6 +1,1 @@
-[submodule "test-child-repo"]
-	path = test-child-repo
-	url = git@github.com:baxterjo/test-child-repo.git
-[submodule "test_outer_directory/test-child-repo"]
-	path = test_outer_directory/test-child-repo
-	url = git@github.com:baxterjo/test-child-repo.git
+
