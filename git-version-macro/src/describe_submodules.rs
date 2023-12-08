@@ -81,7 +81,6 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 		Err(err) => return Err(error!("{}", err)),
 	};
 	modules.retain(|path| path != "");
-	println!("modules:{:?}", modules);
 	let mut describe_paths: Vec<(String, String)> = vec![];
 
 	for path in modules.into_iter() {
