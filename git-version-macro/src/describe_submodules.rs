@@ -12,7 +12,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	token::{Comma, Eq},
-	Expr, Ident, LitStr,
+	Ident, LitStr,
 };
 
 macro_rules! error {
@@ -26,7 +26,7 @@ pub(crate) struct GitModArgs {
 	args: Option<Punctuated<LitStr, Comma>>,
 	prefix: Option<LitStr>,
 	suffix: Option<LitStr>,
-	fallback: Option<Expr>,
+	fallback: Option<LitStr>,
 }
 
 impl Parse for GitModArgs {
@@ -80,7 +80,9 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 		Ok(x) => x,
 		Err(err) => return Err(error!("{}", err)),
 	};
-	modules.retain(|path| path != "");
+
+	modules.retain(|path| !path.is_empty());
+
 	let mut describe_paths: Vec<(String, String)> = vec![];
 
 	for path in modules {
@@ -102,8 +104,9 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 		Some(x) => x.value(),
 		_ => "".to_string(),
 	};
+	let fallback = args.fallback.map(|x| x.value());
 
-	match describe_modules(describe_paths, &git_describe_args, prefix, suffix) {
+	match describe_modules(describe_paths, &git_describe_args, prefix, suffix, fallback) {
 		Ok(result) => {
 			let dependencies = git_dependencies()?;
 			let (paths, versions) = result;
@@ -115,7 +118,6 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 
 			}))
 		}
-		Err(_) if args.fallback.is_some() => Ok(quote!([("fallback", args.fallback)])),
 		Err(e) => Err(error!("{}", e)),
 	}
 }
@@ -141,6 +143,7 @@ fn describe_modules<I, S>(
 	describe_args: I,
 	prefix: String,
 	suffix: String,
+	fallback: Option<String>,
 ) -> Result<(Vec<String>, Vec<String>), String>
 where
 	I: IntoIterator<Item = S> + Clone,
@@ -150,13 +153,21 @@ where
 	let mut versions: Vec<String> = vec![];
 
 	for (rel_path, abs_path) in paths.into_iter() {
-		let result = run_git(
+		// Get the submodule version or fallback.
+		let result = match run_git(
 			"git describe",
 			Command::new("git")
 				.current_dir(abs_path)
 				.arg("describe")
 				.args(describe_args.clone()),
-		)?;
+		) {
+			Ok(version) => version,
+			Err(_git_err) if fallback.is_some() => fallback.clone().unwrap(),
+			Err(git_err) => {
+				// If git error and no fallback provided, return error.
+				return Err(git_err);
+			}
+		};
 		paths_out.push(rel_path);
 		versions.push(format!("{}{}{}", prefix, result, suffix))
 	}
