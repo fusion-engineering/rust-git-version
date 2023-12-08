@@ -83,7 +83,7 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 	modules.retain(|path| path != "");
 	let mut describe_paths: Vec<(String, String)> = vec![];
 
-	for path in modules.into_iter() {
+	for path in modules {
 		let path_obj = Path::new(&path);
 		let path_obj = canonicalize_path(path_obj)?;
 		describe_paths.push((path, path_obj));
