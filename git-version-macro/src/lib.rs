@@ -214,7 +214,7 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// - `fallback`:
 ///   If all else fails, this string will be given instead of reporting an
 ///   error. This will yield the same type as if the macro was a success, but
-///   format will be `[("fallback", fallback_argument)]`
+///   format will be `[("relative/path/to/submodule", {fallback})]`
 ///
 /// # Examples
 ///
