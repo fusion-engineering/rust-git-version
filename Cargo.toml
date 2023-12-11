@@ -1,0 +1,11 @@
+[package]
+name = "git-version-tests"
+version = "0.0.0"
+license = "BSD-2-Clause"
+edition = "2021"
+publish = []
+
+[workspace]
+
+[dev-dependencies]
+assert2 = "0.3.11"
