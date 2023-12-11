@@ -17,7 +17,7 @@ pub fn git_dir_cwd() -> Result<PathBuf, String> {
 	Ok(PathBuf::from(path))
 }
 
-fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
+pub(crate) fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
 	let output = command
 		.stdout(std::process::Stdio::piped())
 		.stderr(std::process::Stdio::piped())
@@ -34,8 +34,8 @@ fn run_git(program: &str, command: &mut std::process::Command) -> Result<String,
 
 	let output = collect_output(program, output)?;
 	let output = strip_trailing_newline(output);
-	let output = String::from_utf8(output)
-		.map_err(|_| format!("Failed to parse output of `{}`: output contains invalid UTF-8", program))?;
+	let output =
+		String::from_utf8(output).map_err(|_| format!("Failed to parse output of `{}`: output contains invalid UTF-8", program))?;
 	Ok(output)
 }
 
@@ -48,7 +48,9 @@ fn collect_output(program: &str, output: std::process::Output) -> Result<Vec<u8>
 	// If the command terminated with non-zero exit code, return an error.
 	} else if let Some(status) = output.status.code() {
 		// Include the first line of stderr in the error message, if it's valid UTF-8 and not empty.
-		let message = output.stderr.split(|c| *c == b'\n')
+		let message = output
+			.stderr
+			.split(|c| *c == b'\n')
 			.next()
 			.and_then(|x| std::str::from_utf8(x).ok())
 			.filter(|x| !x.is_empty());
@@ -82,8 +84,8 @@ fn strip_trailing_newline(mut input: Vec<u8>) -> Vec<u8> {
 
 #[test]
 fn test_git_dir() {
-	use std::path::Path;
 	use assert2::{assert, let_assert};
+	use std::path::Path;
 
 	let_assert!(Ok(git_dir) = git_dir_cwd());
 	let_assert!(Ok(git_dir) = git_dir.canonicalize());

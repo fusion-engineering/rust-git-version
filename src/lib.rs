@@ -13,7 +13,7 @@
 //! These macros do not depend on libgit, but simply uses the `git` binary directly.
 //! So you must have `git` installed somewhere in your `PATH`.
 
-pub use git_version_macro::git_version;
+pub use git_version_macro::{git_module_versions, git_version};
 
 /// Run `git describe` at compile time with custom flags.
 ///

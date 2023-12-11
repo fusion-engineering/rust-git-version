@@ -6,7 +6,7 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::{Comma, Eq};
 use syn::{Expr, Ident, LitStr};
-
+pub(crate) mod describe_submodules;
 mod utils;
 use self::utils::{describe_cwd, git_dir_cwd};
 
@@ -17,8 +17,7 @@ macro_rules! error {
 }
 
 fn canonicalize_path(path: &Path) -> syn::Result<String> {
-	path
-		.canonicalize()
+	path.canonicalize()
 		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
 		.into_os_string()
 		.into_string()
@@ -29,12 +28,18 @@ fn canonicalize_path(path: &Path) -> syn::Result<String> {
 fn git_dependencies() -> syn::Result<TokenStream2> {
 	let git_dir = git_dir_cwd().map_err(|e| error!("failed to determine .git directory: {}", e))?;
 
-	let deps: Vec<_> = ["logs/HEAD", "index"].iter().flat_map(|&file| {
-		canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e|  {
-			eprintln!("Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.", e);
-			None
+	let deps: Vec<_> = ["logs/HEAD", "index"]
+		.iter()
+		.flat_map(|&file| {
+			canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e| {
+				eprintln!(
+					"Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.",
+					e
+				);
+				None
+			})
 		})
-	}).collect();
+		.collect();
 
 	Ok(quote! {
 		#( include_bytes!(#deps); )*
@@ -55,7 +60,9 @@ impl Parse for Args {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let mut result = Args::default();
 		loop {
-			if input.is_empty() { break; }
+			if input.is_empty() {
+				break;
+			}
 			let ident: Ident = input.parse()?;
 			let _: Eq = input.parse()?;
 			let check_dup = |dup: bool| {
@@ -94,7 +101,9 @@ impl Parse for Args {
 				}
 				x => Err(error!("Unexpected argument name `{}`", x))?,
 			}
-			if input.is_empty() { break; }
+			if input.is_empty() {
+				break;
+			}
 			let _: Comma = input.parse()?;
 		}
 		Ok(result)
@@ -151,7 +160,7 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let git_args = args.git_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
-		|list| list.iter().map(|x| x.value()).collect()
+		|list| list.iter().map(|x| x.value()).collect(),
 	);
 
 	let cargo_fallback = args.cargo_prefix.is_some() || args.cargo_suffix.is_some();
@@ -170,20 +179,65 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 			if let Ok(version) = std::env::var("CARGO_PKG_VERSION") {
 				let prefix = args.cargo_prefix.iter();
 				let suffix = args.cargo_suffix;
-				Ok(quote!(
-					concat!(#(#prefix,)* #version, #suffix)
-				))
+				Ok(quote!(concat!(#(#prefix,)* #version, #suffix)))
 			} else if let Some(fallback) = args.fallback {
 				Ok(fallback.to_token_stream())
 			} else {
 				Err(error!("Unable to get git or cargo version"))
 			}
 		}
-		Err(_) if args.fallback.is_some() => {
-			Ok(args.fallback.to_token_stream())
-		}
-		Err(e) => {
-			Err(error!("{}", e))
-		}
+		Err(_) if args.fallback.is_some() => Ok(args.fallback.to_token_stream()),
+		Err(e) => Err(error!("{}", e)),
 	}
+}
+
+/// Get the git version for submodules below the cargo project.
+///
+/// This macro will not infer type if there are no submodules in the project.
+///
+/// This macro expands to `[(&str, &str), N]` where `N` is the total number of
+/// submodules below the root of the project (evaluated recursively)
+///
+/// The format of the array is as follows:
+///
+/// `[("relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}")]`
+///
+/// The following (named) arguments can be given:
+///
+/// - `args`: The arguments to call `git describe` with.
+///   Default: `args = ["--always", "--dirty=-modified"]`
+///
+/// - `prefix`, `suffix`:
+///   The git version for each submodule will be prefixed/suffixed
+///   by these strings.
+///
+/// - `fallback`:
+///   If all else fails, this string will be given instead of reporting an
+///   error. This will yield the same type as if the macro was a success, but
+///   format will be `[("relative/path/to/submodule", {fallback})]`
+///
+/// # Examples
+///
+/// ```
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!();
+/// ```
+///
+/// ```
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(args = ["--abbrev=40", "--always"]);
+/// ```
+///
+/// ```
+/// # use git_version::git_version_modules;
+/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(prefix = "git:", fallback = "unknown");
+/// ```
+#[proc_macro]
+pub fn git_module_versions(input: TokenStream) -> TokenStream {
+	let args = syn::parse_macro_input!(input as describe_submodules::GitModArgs);
+
+	let tokens = match describe_submodules::git_module_versions_impl(args) {
+		Ok(x) => x,
+		Err(e) => e.to_compile_error(),
+	};
+
+	TokenStream::from(tokens)
 }
