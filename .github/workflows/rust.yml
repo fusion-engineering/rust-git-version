@@ -7,6 +7,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+    - name: Create local branches for tests
+      run: |
+        for branch in test-root test-module-{a,b,c}; do
+          git branch --track "$branch" "origin/$branch"
+        done
     - name: Build
       run: cargo +stable build --verbose
     - name: Run tests
@@ -19,6 +24,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+    - name: Create local branches for tests
+      run: |
+        for branch in test-root test-module-{a,b,c}; do
+          git branch --track "$branch" "origin/$branch"
+        done
     - name: Build
       run: cargo +nightly build --verbose
     - name: Run tests
