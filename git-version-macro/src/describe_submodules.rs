@@ -75,8 +75,8 @@ impl Parse for GitModArgs {
 	}
 }
 
-pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
-	let mut modules = match get_modules() {
+pub(crate) fn git_submodule_versions_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
+	let mut modules = match get_submodules() {
 		Ok(x) => x,
 		Err(err) => return Err(error!("{}", err)),
 	};
@@ -106,24 +106,30 @@ pub(crate) fn git_module_versions_impl(args: GitModArgs) -> syn::Result<TokenStr
 	};
 	let fallback = args.fallback.map(|x| x.value());
 
-	match describe_modules(describe_paths, &git_describe_args, prefix, suffix, fallback) {
+	match describe_submodules(describe_paths, &git_describe_args, prefix, suffix, fallback) {
 		Ok(result) => {
 			let dependencies = git_dependencies()?;
 			let (paths, versions) = result;
 
-			Ok(quote!({
-				#dependencies;
-
-				[#((#paths, #versions)),*]
-
-			}))
+			// Ensure that the type of the empty array is still known to the compiler.
+			if paths.is_empty() {
+				Ok(quote!({
+					#dependencies;
+					[("", ""); 0]
+				}))
+			} else {
+				Ok(quote!({
+					#dependencies;
+					[#((#paths, #versions)),*]
+				}))
+			}
 		}
 		Err(e) => Err(error!("{}", e)),
 	}
 }
 
 /// Run `git submodule foreach` command to discover submodules in the project.
-fn get_modules() -> Result<Vec<String>, String> {
+fn get_submodules() -> Result<Vec<String>, String> {
 	let mut args: Vec<String> = "submodule foreach --quiet --recursive"
 		.to_string()
 		.split(' ')
@@ -138,7 +144,7 @@ fn get_modules() -> Result<Vec<String>, String> {
 }
 
 /// Run `git describe` for each submodule to get the git version with the specified args.
-fn describe_modules<I, S>(
+fn describe_submodules<I, S>(
 	paths: Vec<(String, String)>,
 	describe_args: I,
 	prefix: String,

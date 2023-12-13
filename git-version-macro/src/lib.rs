@@ -219,22 +219,27 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// # Examples
 ///
 /// ```
-/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!();
+/// # use git_version::git_submodule_versions;
+/// # const N: usize = 0;
+/// const MODULE_VERSIONS: [(&str, &str); N] = git_submodule_versions!();
 /// ```
 ///
 /// ```
-/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(args = ["--abbrev=40", "--always"]);
+/// # use git_version::git_submodule_versions;
+/// # const N: usize = 0;
+/// const MODULE_VERSIONS: [(&str, &str); N] = git_submodule_versions!(args = ["--abbrev=40", "--always"]);
 /// ```
 ///
 /// ```
-/// # use git_version::git_version_modules;
-/// const MODULE_VERSIONS: [(&str, &str), N] = git_version_modules!(prefix = "git:", fallback = "unknown");
+/// # use git_version::git_submodule_versions;
+/// # const N: usize = 0;
+/// const MODULE_VERSIONS: [(&str, &str); N] = git_submodule_versions!(prefix = "git:", fallback = "unknown");
 /// ```
 #[proc_macro]
-pub fn git_module_versions(input: TokenStream) -> TokenStream {
+pub fn git_submodule_versions(input: TokenStream) -> TokenStream {
 	let args = syn::parse_macro_input!(input as describe_submodules::GitModArgs);
 
-	let tokens = match describe_submodules::git_module_versions_impl(args) {
+	let tokens = match describe_submodules::git_submodule_versions_impl(args) {
 		Ok(x) => x,
 		Err(e) => e.to_compile_error(),
 	};
