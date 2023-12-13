@@ -243,7 +243,7 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// ```
 #[proc_macro]
 pub fn git_submodule_versions(input: TokenStream) -> TokenStream {
-	let args = syn::parse_macro_input!(input as describe_submodules::GitModArgs);
+	let args = syn::parse_macro_input!(input as Args);
 
 	let tokens = match describe_submodules::git_submodule_versions_impl(args) {
 		Ok(x) => x,

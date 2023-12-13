@@ -25,7 +25,28 @@ pub fn git_dir(dir: impl AsRef<Path>) -> Result<PathBuf, String> {
 	Ok(dir.join(path))
 }
 
-pub fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
+/// Run `git submodule foreach` command to discover submodules in the project.
+pub fn get_submodules(dir: impl AsRef<Path>) -> Result<Vec<String>, String> {
+	let dir = dir.as_ref();
+	let result = run_git("git submodule",
+		Command::new("git")
+			.arg("-C")
+			.arg(dir)
+			.arg("submodule")
+			.arg("foreach")
+			.arg("--quiet")
+			.arg("--recursive")
+			.arg("echo $displaypath"),
+	)?;
+
+	Ok(result.lines()
+		.filter(|x| !x.is_empty())
+		.map(|x| x.to_owned())
+		.collect()
+	)
+}
+
+fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
 	let output = command
 		.stdout(std::process::Stdio::piped())
 		.stderr(std::process::Stdio::piped())
