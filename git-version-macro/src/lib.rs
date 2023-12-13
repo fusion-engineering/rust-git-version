@@ -1,117 +1,15 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
-use std::path::{Path, PathBuf};
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::token::{Comma, Eq};
-use syn::{Expr, Ident, LitStr};
-use self::utils::{describe, git_dir};
-
-mod describe_submodules;
-mod utils;
 
 macro_rules! error {
 	($($args:tt)*) => {
-		syn::Error::new(Span::call_site(), format!($($args)*))
+		syn::Error::new(proc_macro2::Span::call_site(), format!($($args)*))
 	};
 }
 
-fn canonicalize_path(path: &Path) -> syn::Result<String> {
-	path.canonicalize()
-		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
-		.into_os_string()
-		.into_string()
-		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))
-}
-
-/// Create a token stream representing dependencies on the git state.
-fn git_dependencies() -> syn::Result<TokenStream2> {
-	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
-		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
-	let git_dir = git_dir(manifest_dir).map_err(|e| error!("failed to determine .git directory: {}", e))?;
-
-	let deps: Vec<_> = ["logs/HEAD", "index"]
-		.iter()
-		.flat_map(|&file| {
-			canonicalize_path(&git_dir.join(file)).map(Some).unwrap_or_else(|e| {
-				eprintln!(
-					"Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.",
-					e
-				);
-				None
-			})
-		})
-		.collect();
-
-	Ok(quote! {
-		#( include_bytes!(#deps); )*
-	})
-}
-
-#[derive(Default)]
-struct Args {
-	git_args: Option<Punctuated<LitStr, Comma>>,
-	prefix: Option<Expr>,
-	suffix: Option<Expr>,
-	cargo_prefix: Option<Expr>,
-	cargo_suffix: Option<Expr>,
-	fallback: Option<Expr>,
-}
-
-impl Parse for Args {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
-		let mut result = Args::default();
-		loop {
-			if input.is_empty() {
-				break;
-			}
-			let ident: Ident = input.parse()?;
-			let _: Eq = input.parse()?;
-			let check_dup = |dup: bool| {
-				if dup {
-					Err(error!("`{} = ` can only appear once", ident))
-				} else {
-					Ok(())
-				}
-			};
-			match ident.to_string().as_str() {
-				"args" => {
-					check_dup(result.git_args.is_some())?;
-					let content;
-					syn::bracketed!(content in input);
-					result.git_args = Some(Punctuated::parse_terminated(&content)?);
-				}
-				"prefix" => {
-					check_dup(result.prefix.is_some())?;
-					result.prefix = Some(input.parse()?);
-				}
-				"suffix" => {
-					check_dup(result.suffix.is_some())?;
-					result.suffix = Some(input.parse()?);
-				}
-				"cargo_prefix" => {
-					check_dup(result.cargo_prefix.is_some())?;
-					result.cargo_prefix = Some(input.parse()?);
-				}
-				"cargo_suffix" => {
-					check_dup(result.cargo_suffix.is_some())?;
-					result.cargo_suffix = Some(input.parse()?);
-				}
-				"fallback" => {
-					check_dup(result.fallback.is_some())?;
-					result.fallback = Some(input.parse()?);
-				}
-				x => Err(error!("Unexpected argument name `{}`", x))?,
-			}
-			if input.is_empty() {
-				break;
-			}
-			let _: Comma = input.parse()?;
-		}
-		Ok(result)
-	}
-}
+mod args;
+mod utils;
 
 /// Get the git version for the source code.
 ///
@@ -150,7 +48,7 @@ impl Parse for Args {
 /// ```
 #[proc_macro]
 pub fn git_version(input: TokenStream) -> TokenStream {
-	let args = syn::parse_macro_input!(input as Args);
+	let args = syn::parse_macro_input!(input as args::Args);
 
 	let tokens = match git_version_impl(args) {
 		Ok(x) => x,
@@ -160,7 +58,7 @@ pub fn git_version(input: TokenStream) -> TokenStream {
 	TokenStream::from(tokens)
 }
 
-fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
+fn git_version_impl(args: args::Args) -> syn::Result<TokenStream2> {
 	let git_args = args.git_args.map_or_else(
 		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
 		|list| list.iter().map(|x| x.value()).collect(),
@@ -171,9 +69,9 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
 		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
 
-	match describe(manifest_dir, git_args) {
+	match utils::describe(manifest_dir, git_args) {
 		Ok(version) => {
-			let dependencies = git_dependencies()?;
+			let dependencies = utils::git_dependencies()?;
 			let prefix = args.prefix.iter();
 			let suffix = args.suffix;
 			Ok(quote!({
@@ -197,16 +95,12 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	}
 }
 
-/// Get the git version for submodules below the cargo project.
-///
-/// This macro will not infer type if there are no submodules in the project.
+/// Get the git version of all submodules below the cargo project.
 ///
 /// This macro expands to `[(&str, &str), N]` where `N` is the total number of
 /// submodules below the root of the project (evaluated recursively)
 ///
-/// The format of the array is as follows:
-///
-/// `[("relative/path/to/submodule", "{prefix}{git_describe_output}{suffix}")]`
+/// Each entry in the array is a tuple of the submodule path and the version information.
 ///
 /// The following (named) arguments can be given:
 ///
@@ -228,6 +122,9 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// # use git_version::git_submodule_versions;
 /// # const N: usize = 0;
 /// const MODULE_VERSIONS: [(&str, &str); N] = git_submodule_versions!();
+/// for (path, version) in MODULE_VERSIONS {
+///     println!("{path}: {version}");
+/// }
 /// ```
 ///
 /// ```
@@ -243,12 +140,69 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 /// ```
 #[proc_macro]
 pub fn git_submodule_versions(input: TokenStream) -> TokenStream {
-	let args = syn::parse_macro_input!(input as Args);
+	let args = syn::parse_macro_input!(input as args::Args);
 
-	let tokens = match describe_submodules::git_submodule_versions_impl(args) {
+	let tokens = match git_submodule_versions_impl(args) {
 		Ok(x) => x,
 		Err(e) => e.to_compile_error(),
 	};
 
 	TokenStream::from(tokens)
+}
+
+fn git_submodule_versions_impl(args: args::Args) -> syn::Result<TokenStream2> {
+	if let Some(cargo_prefix) = &args.cargo_prefix {
+		return Err(syn::Error::new_spanned(cargo_prefix, "invalid argument `cargo_prefix` for `git_submodule_versions!()`"));
+	}
+	if let Some(cargo_suffix) = &args.cargo_suffix {
+		return Err(syn::Error::new_spanned(cargo_suffix, "invalid argument `cargo_suffix` for `git_submodule_versions!()`"));
+	}
+
+	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
+	let git_dir = crate::utils::git_dir(&manifest_dir)
+		.map_err(|e| error!("failed to determine .git directory: {}", e))?;
+
+	let modules = match crate::utils::get_submodules(&manifest_dir) {
+		Ok(x) => x,
+		Err(err) => return Err(error!("{}", err)),
+	};
+
+	// Ensure that the type of the empty array is still known to the compiler.
+	if modules.is_empty() {
+		return Ok(quote!([("", ""); 0]));
+	}
+
+	let git_args = args.git_args.as_ref().map_or_else(
+		|| vec!["--always".to_string(), "--dirty=-modified".to_string()],
+		|list| list.iter().map(|x| x.value()).collect(),
+	);
+
+	let root_dir = git_dir.join("..");
+	let mut versions = Vec::new();
+	for submodule in &modules {
+		let path = root_dir.join(submodule);
+		// Get the submodule version or fallback.
+		let version = match crate::utils::describe(path, &git_args) {
+			Ok(version) => {
+				let prefix = args.prefix.iter();
+				let suffix = args.suffix.iter();
+				quote!{
+					::core::concat!(#(#prefix,)* #version #(, #suffix)*)
+				}
+			}
+			Err(e) => {
+				if let Some(fallback) = &args.fallback {
+					quote!( #fallback )
+				} else {
+					return Err(error!("{}", e));
+				}
+			},
+		};
+		versions.push(version);
+	}
+
+	Ok(quote!({
+		[#((#modules, #versions)),*]
+	}))
 }

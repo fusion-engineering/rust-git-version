@@ -46,6 +46,34 @@ pub fn get_submodules(dir: impl AsRef<Path>) -> Result<Vec<String>, String> {
 	)
 }
 
+pub fn canonicalize_path(path: &Path) -> syn::Result<String> {
+	path.canonicalize()
+		.map_err(|e| error!("failed to canonicalize {}: {}", path.display(), e))?
+		.into_os_string()
+		.into_string()
+		.map_err(|file| error!("invalid UTF-8 in path to {}", PathBuf::from(file).display()))
+}
+
+/// Create a token stream representing dependencies on the git state.
+pub fn git_dependencies() -> syn::Result<proc_macro2::TokenStream> {
+	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
+	let git_dir = git_dir(manifest_dir).map_err(|e| error!("failed to determine .git directory: {}", e))?;
+
+	let deps: Vec<_> = ["logs/HEAD", "index"]
+		.iter()
+		.flat_map(|&file| {
+			canonicalize_path(&git_dir.join(file))
+			.map_err(|e| eprintln!("Failed to add dependency on the git state: {}. Git state changes might not trigger a rebuild.", e))
+			.ok()
+		})
+		.collect();
+
+	Ok(quote::quote! {
+		#( include_bytes!(#deps); )*
+	})
+}
+
 fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
 	let output = command
 		.stdout(std::process::Stdio::piped())
