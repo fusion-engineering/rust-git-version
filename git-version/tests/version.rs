@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use assert2::{assert, let_assert};
 use git_version::{git_describe, git_submodule_versions, git_version};
@@ -22,42 +22,33 @@ fn git_describe_is_right() {
 #[test]
 fn test_in_external_clone() {
 	let_assert!(Ok(tempdir) = tempfile::tempdir());
-	let_assert!(Some(project_dir) = std::env::var_os("CARGO_MANIFEST_DIR"));
-	let_assert!(Ok(project_dir) = PathBuf::from(project_dir).canonicalize());
-	let_assert!(Ok(target_dir) = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).canonicalize());
+	let_assert!(Some(lib_dir) = std::env::var_os("CARGO_MANIFEST_DIR"));
+	let_assert!(Ok(lib_dir) = Path::new(&lib_dir).canonicalize());
+	let_assert!(Ok(target_dir) = Path::new(env!("CARGO_TARGET_TMPDIR")).canonicalize());
 	let target_dir = target_dir.join("tests_target");
 
 	let_assert!(Ok(result) = std::process::Command::new("git")
+		.arg("-c")
+		.arg("protocol.file.allow=always")
 		.arg("clone")
 		.arg("--quiet")
+		.arg("--recurse-submodules")
 		.arg("-b")
 		.arg("test-root")
-		.arg(&project_dir)
+		.arg((lib_dir).join(".."))
 		.arg(tempdir.path())
 		.status()
 	);
-	assert!(result.success(), "git clone: {result:?}");
-
-	let_assert!(Ok(result) = std::process::Command::new("git")
-		.current_dir(&tempdir)
-		.arg("-c")
-		.arg("protocol.file.allow=always")
-		.arg("submodule")
-		.arg("--quiet")
-		.arg("update")
-		.arg("--init")
-		.status()
-	);
-	assert!(result.success(), "git submodule update --init: {result:?}");
+	assert!(result.success(), "git clone: {result}");
 
 	let_assert!(Ok(result) = std::process::Command::new("cargo")
 		.current_dir(&tempdir)
 		.arg("add")
 		.arg("--path")
-		.arg(&project_dir)
+		.arg(&(lib_dir))
 		.status()
 	);
-	assert!(result.success(), "cargo test: {result:?}");
+	assert!(result.success(), "cargo test: {result}");
 
 	let_assert!(Ok(result) = std::process::Command::new("cargo")
 		.current_dir(&tempdir)
@@ -66,5 +57,5 @@ fn test_in_external_clone() {
 		.arg(target_dir)
 		.status()
 	);
-	assert!(result.success(), "cargo test: {result:?}");
+	assert!(result.success(), "cargo test: {result}");
 }

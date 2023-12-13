@@ -25,4 +25,4 @@ syn = "2.0"
 
 [dev-dependencies]
 assert2 = "0.3.11"
-git-version = { path = ".." }
+git-version = { path = "../git-version" }

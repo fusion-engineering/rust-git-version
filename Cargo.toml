@@ -1,27 +1,6 @@
-[package]
-name = "git-version"
-description = "Compile the git version (tag name, or hash otherwise) and dirty state into your program."
-version = "0.3.8"
-authors = [
-	"Mara Bos <m-ou.se@m-ou.se>",
-	"Maarten de Vries <maarten@de-vri.es>",
-	"David Roundy <daveroundy@gmail.com>",
-]
-license = "BSD-2-Clause"
-repository = "https://github.com/fusion-engineering/rust-git-version"
-documentation = "https://docs.rs/git-version/"
-keywords = ["git", "version", "build"]
-categories = ["development-tools", "development-tools::build-utils"]
-edition = "2021"
-readme = "README.md"
-
-[dependencies]
-git-version-macro = { version = "=0.3.8", path = "git-version-macro" }
-
 [workspace]
 resolver = "2"
-members = ["git-version-macro"]
-
-[dev-dependencies]
-assert2 = "0.3.11"
-tempfile = "3.8.1"
+members = [
+	"git-version",
+	"git-version-macro",
+]
