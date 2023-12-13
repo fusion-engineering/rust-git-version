@@ -1,32 +1,40 @@
 use std::ffi::OsStr;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::process::Command;
 
 /// Run `git describe` for the current working directory with custom flags to get version information from git.
-pub fn describe_cwd<I, S>(args: I) -> Result<String, String>
+pub fn describe<I, S>(dir: impl AsRef<Path>, args: I) -> Result<String, String>
 where
 	I: IntoIterator<Item = S>,
 	S: AsRef<OsStr>,
 {
-	run_git("git describe", Command::new("git").arg("describe").args(args))
+	let dir = dir.as_ref();
+	run_git("git describe", Command::new("git")
+		.arg("-C")
+		.arg(dir)
+		.arg("describe").args(args))
 }
 
-/// Get the git directory for the current working directory.
-pub fn git_dir_cwd() -> Result<PathBuf, String> {
-	let path = run_git("git rev-parse", Command::new("git").args(["rev-parse", "--git-dir"]))?;
-	Ok(PathBuf::from(path))
+/// Get the git directory for the given directory.
+pub fn git_dir(dir: impl AsRef<Path>) -> Result<PathBuf, String> {
+	let dir = dir.as_ref();
+	let path = run_git("git rev-parse", Command::new("git")
+		.arg("-C")
+		.arg(dir)
+		.args(["rev-parse", "--git-dir"]))?;
+	Ok(dir.join(path))
 }
 
-pub(crate) fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
+pub fn run_git(program: &str, command: &mut std::process::Command) -> Result<String, String> {
 	let output = command
 		.stdout(std::process::Stdio::piped())
 		.stderr(std::process::Stdio::piped())
 		.spawn()
 		.map_err(|e| {
 			if e.kind() == std::io::ErrorKind::NotFound {
-				"Command `git` not found: is git installed?".to_string()
+				format!("Command `{}` not found: is git installed?", command.get_program().to_string_lossy())
 			} else {
-				format!("Failed to run `{}`: {}", program, e)
+				format!("Failed to run `{}`: {}", command.get_program().to_string_lossy(), e)
 			}
 		})?
 		.wait_with_output()
@@ -87,7 +95,7 @@ fn test_git_dir() {
 	use assert2::{assert, let_assert};
 	use std::path::Path;
 
-	let_assert!(Ok(git_dir) = git_dir_cwd());
+	let_assert!(Ok(git_dir) = git_dir("."));
 	let_assert!(Ok(git_dir) = git_dir.canonicalize());
 	let_assert!(Ok(expected) = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.git").canonicalize());
 	assert!(git_dir == expected);

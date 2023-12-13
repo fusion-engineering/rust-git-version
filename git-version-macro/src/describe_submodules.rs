@@ -1,7 +1,4 @@
 extern crate proc_macro;
-use crate::canonicalize_path;
-use crate::git_dependencies;
-use crate::utils::run_git;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use std::ffi::OsStr;
@@ -14,6 +11,8 @@ use syn::{
 	token::{Comma, Eq},
 	Ident, LitStr,
 };
+
+use crate::utils::{git_dir, run_git};
 
 macro_rules! error {
 	($($args:tt)*) => {
@@ -76,19 +75,19 @@ impl Parse for GitModArgs {
 }
 
 pub(crate) fn git_submodule_versions_impl(args: GitModArgs) -> syn::Result<TokenStream2> {
-	let mut modules = match get_submodules() {
+	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
+	let git_dir = git_dir(&manifest_dir)
+		.map_err(|e| error!("failed to determine .git directory: {}", e))?;
+
+	let modules = match get_submodules(&manifest_dir) {
 		Ok(x) => x,
 		Err(err) => return Err(error!("{}", err)),
 	};
 
-	modules.retain(|path| !path.is_empty());
-
-	let mut describe_paths: Vec<(String, String)> = vec![];
-
-	for path in modules {
-		let path_obj = Path::new(&path);
-		let path_obj = canonicalize_path(path_obj)?;
-		describe_paths.push((path, path_obj));
+	// Ensure that the type of the empty array is still known to the compiler.
+	if modules.is_empty() {
+		return Ok(quote!([("", ""); 0]));
 	}
 
 	let git_describe_args = args.args.map_or_else(
@@ -106,77 +105,65 @@ pub(crate) fn git_submodule_versions_impl(args: GitModArgs) -> syn::Result<Token
 	};
 	let fallback = args.fallback.map(|x| x.value());
 
-	match describe_submodules(describe_paths, &git_describe_args, prefix, suffix, fallback) {
-		Ok(result) => {
-			let dependencies = git_dependencies()?;
-			let (paths, versions) = result;
+	let versions = describe_submodules(&git_dir.join(".."), &modules, &git_describe_args, &prefix, &suffix, fallback.as_deref())
+		.map_err(|e| error!("{}", e))?;
 
-			// Ensure that the type of the empty array is still known to the compiler.
-			if paths.is_empty() {
-				Ok(quote!({
-					#dependencies;
-					[("", ""); 0]
-				}))
-			} else {
-				Ok(quote!({
-					#dependencies;
-					[#((#paths, #versions)),*]
-				}))
-			}
-		}
-		Err(e) => Err(error!("{}", e)),
-	}
+	Ok(quote!({
+		[#((#modules, #versions)),*]
+	}))
 }
 
 /// Run `git submodule foreach` command to discover submodules in the project.
-fn get_submodules() -> Result<Vec<String>, String> {
-	let mut args: Vec<String> = "submodule foreach --quiet --recursive"
-		.to_string()
-		.split(' ')
-		.map(|x| x.to_string())
-		.collect();
+fn get_submodules(dir: impl AsRef<Path>) -> Result<Vec<String>, String> {
+	let dir = dir.as_ref();
+	let result = run_git("git submodule",
+		Command::new("git")
+			.arg("-C")
+			.arg(dir)
+			.arg("submodule")
+			.arg("foreach")
+			.arg("--quiet")
+			.arg("--recursive")
+			.arg("echo $displaypath"),
+	)?;
 
-	args.push("echo $displaypath".to_string());
-
-	let result = run_git("git submodule", Command::new("git").args(args))?;
-
-	Ok(result.split('\n').map(|x| x.to_string()).collect())
+	Ok(result.lines()
+		.filter(|x| !x.is_empty())
+		.map(|x| x.to_owned())
+		.collect()
+	)
 }
 
 /// Run `git describe` for each submodule to get the git version with the specified args.
 fn describe_submodules<I, S>(
-	paths: Vec<(String, String)>,
+	root: &Path,
+	submodules: &[String],
 	describe_args: I,
-	prefix: String,
-	suffix: String,
-	fallback: Option<String>,
-) -> Result<(Vec<String>, Vec<String>), String>
+	prefix: &str,
+	suffix: &str,
+	fallback: Option<&str>,
+) -> Result<Vec<String>, String>
 where
 	I: IntoIterator<Item = S> + Clone,
 	S: AsRef<OsStr>,
 {
-	let mut paths_out: Vec<String> = vec![];
 	let mut versions: Vec<String> = vec![];
 
-	for (rel_path, abs_path) in paths.into_iter() {
+	for submodule in submodules {
+		let path = root.join(submodule);
 		// Get the submodule version or fallback.
-		let result = match run_git(
-			"git describe",
-			Command::new("git")
-				.current_dir(abs_path)
-				.arg("describe")
-				.args(describe_args.clone()),
-		) {
+		let version = match crate::utils::describe(path, describe_args.clone()) {
 			Ok(version) => version,
-			Err(_git_err) if fallback.is_some() => fallback.clone().unwrap(),
-			Err(git_err) => {
-				// If git error and no fallback provided, return error.
-				return Err(git_err);
-			}
+			Err(e) => {
+				if let Some(fallback) = fallback {
+					fallback.to_owned()
+				} else {
+					return Err(e)
+				}
+			},
 		};
-		paths_out.push(rel_path);
-		versions.push(format!("{}{}{}", prefix, result, suffix))
+		versions.push(format!("{}{}{}", prefix, version, suffix))
 	}
 
-	Ok((paths_out, versions))
+	Ok(versions)
 }

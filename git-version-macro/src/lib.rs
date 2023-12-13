@@ -6,9 +6,10 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::token::{Comma, Eq};
 use syn::{Expr, Ident, LitStr};
-pub(crate) mod describe_submodules;
+use self::utils::{describe, git_dir};
+
+mod describe_submodules;
 mod utils;
-use self::utils::{describe_cwd, git_dir_cwd};
 
 macro_rules! error {
 	($($args:tt)*) => {
@@ -26,7 +27,9 @@ fn canonicalize_path(path: &Path) -> syn::Result<String> {
 
 /// Create a token stream representing dependencies on the git state.
 fn git_dependencies() -> syn::Result<TokenStream2> {
-	let git_dir = git_dir_cwd().map_err(|e| error!("failed to determine .git directory: {}", e))?;
+	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
+	let git_dir = git_dir(manifest_dir).map_err(|e| error!("failed to determine .git directory: {}", e))?;
 
 	let deps: Vec<_> = ["logs/HEAD", "index"]
 		.iter()
@@ -165,7 +168,10 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 
 	let cargo_fallback = args.cargo_prefix.is_some() || args.cargo_suffix.is_some();
 
-	match describe_cwd(&git_args) {
+	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
+
+	match describe(&manifest_dir, git_args) {
 		Ok(version) => {
 			let dependencies = git_dependencies()?;
 			let prefix = args.prefix.iter();
