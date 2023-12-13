@@ -1,55 +1,70 @@
-use git_version::{git_describe, git_module_versions, git_version};
+use std::path::PathBuf;
+
+use assert2::{assert, let_assert};
+use git_version::{git_describe, git_submodule_versions, git_version};
 
 #[test]
 fn git_describe_is_right() {
-	let vec = std::process::Command::new("git")
+	let output = std::process::Command::new("git")
 		.args(["describe", "--always", "--dirty=-modified"])
 		.output()
 		.expect("failed to execute git")
 		.stdout;
-	let name = std::str::from_utf8(&vec[..vec.len() - 1]).expect("non-utf8 error?!");
-	println!("name = {}", name);
-	println!("GIT_VERSION = {}", git_version!(args = ["--always", "--dirty=-modified"]));
-	assert_eq!(git_version!(args = ["--always", "--dirty=-modified"]), name);
-	assert_eq!(git_describe!("--always", "--dirty=-modified"), name);
-	assert_eq!(git_version!(prefix = "[", suffix = "]"), format!("[{}]", name));
+
+	let_assert!(Ok(name) = std::str::from_utf8(&output));
+	let name = name.trim();
+	assert!(git_version!(args = ["--always", "--dirty=-modified"]) == name);
+	assert!(git_describe!("--always", "--dirty=-modified") == name);
+	assert!(git_version!(prefix = "[", suffix = "]") == format!("[{}]", name));
+	assert!(git_submodule_versions!() == []);
 }
 
 #[test]
-fn test_modules_macro_gives_expected_output() {
-	let vec = std::process::Command::new("git")
-		.args(["submodule", "foreach", "--quiet", "--recursive", "echo $displaypath"])
-		.output()
-		.expect("failed to execute git")
-		.stdout;
-	let mut submodules: Vec<String> = String::from_utf8(vec)
-		.expect("Failed to gather submodules for test")
-		.trim_end()
-		.to_string()
-		.split("\n")
-		.map(|str| str.to_string())
-		.collect();
+fn test_in_external_clone() {
+	let_assert!(Ok(tempdir) = tempfile::tempdir());
+	let_assert!(Some(project_dir) = std::env::var_os("CARGO_MANIFEST_DIR"));
+	let_assert!(Ok(project_dir) = PathBuf::from(project_dir).canonicalize());
+	let_assert!(Ok(target_dir) = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).canonicalize());
+	let target_dir = target_dir.join("tests_target");
 
-	submodules.retain(|path| path != "");
+	let_assert!(Ok(result) = std::process::Command::new("git")
+		.arg("clone")
+		.arg("--quiet")
+		.arg("-b")
+		.arg("test-root")
+		.arg(&project_dir)
+		.arg(tempdir.path())
+		.status()
+	);
+	assert!(result.success(), "git clone: {result:?}");
 
-	let mut expected_result: Vec<(String, String)> = vec![];
-	for submodule in submodules.into_iter() {
-		let abs_path = std::fs::canonicalize(submodule.clone()).expect("Failed to canonicalize submodule path in test");
-		let vec = std::process::Command::new("git")
-			.current_dir(abs_path)
-			.args(["describe", "--always", "--dirty=-modified"])
-			.output()
-			.expect("failed to execute git")
-			.stdout;
-		let name = std::str::from_utf8(&vec[..vec.len() - 1]).expect("non-utf8 error?!");
-		expected_result.push((submodule.clone(), name.to_string()))
-	}
+	let_assert!(Ok(result) = std::process::Command::new("git")
+		.current_dir(&tempdir)
+		.arg("-c")
+		.arg("protocol.file.allow=always")
+		.arg("submodule")
+		.arg("--quiet")
+		.arg("update")
+		.arg("--init")
+		.status()
+	);
+	assert!(result.success(), "git submodule update --init: {result:?}");
 
-	let boxed_slice: Box<[(&str, &str)]> = expected_result
-		.iter()
-		.map(|(path, version)| (path.as_str(), version.as_str()))
-		.collect::<Vec<(&str, &str)>>()
-		.into_boxed_slice();
+	let_assert!(Ok(result) = std::process::Command::new("cargo")
+		.current_dir(&tempdir)
+		.arg("add")
+		.arg("--path")
+		.arg(&project_dir)
+		.status()
+	);
+	assert!(result.success(), "cargo test: {result:?}");
 
-	assert_eq!(*boxed_slice, git_module_versions!(args = ["--always", "--dirty=-modified"]));
+	let_assert!(Ok(result) = std::process::Command::new("cargo")
+		.current_dir(&tempdir)
+		.arg("test")
+		.arg("--target-dir")
+		.arg(target_dir)
+		.status()
+	);
+	assert!(result.success(), "cargo test: {result:?}");
 }

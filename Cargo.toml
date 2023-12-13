@@ -21,3 +21,7 @@ git-version-macro = { version = "=0.3.8", path = "git-version-macro" }
 [workspace]
 resolver = "2"
 members = ["git-version-macro"]
+
+[dev-dependencies]
+assert2 = "0.3.11"
+tempfile = "3.8.1"
