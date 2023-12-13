@@ -28,18 +28,46 @@ fn test_in_external_clone() {
 	let target_dir = target_dir.join("tests_target");
 
 	let_assert!(Ok(result) = std::process::Command::new("git")
-		.arg("-c")
-		.arg("protocol.file.allow=always")
 		.arg("clone")
 		.arg("--quiet")
-		.arg("--recurse-submodules")
-		.arg("-b")
-		.arg("test-root")
 		.arg((lib_dir).join(".."))
 		.arg(tempdir.path())
 		.status()
 	);
 	assert!(result.success(), "git clone: {result}");
+
+	let_assert!(Ok(result) = std::process::Command::new("git")
+		.current_dir(&tempdir)
+		.arg("-c")
+		.arg("protocol.file.allow=always")
+		.arg("fetch")
+		.arg("--quiet")
+		.arg("origin")
+		.arg("+refs/remotes/origin/test-*:refs/heads/test-*")
+		.status()
+	);
+	assert!(result.success(), "git fetch: {result}");
+
+	let_assert!(Ok(result) = std::process::Command::new("git")
+		.current_dir(&tempdir)
+		.arg("switch")
+		.arg("--quiet")
+		.arg("test-root")
+		.status()
+	);
+	assert!(result.success(), "git fetch: {result}");
+
+	let_assert!(Ok(result) = std::process::Command::new("git")
+		.current_dir(&tempdir)
+		.arg("-c")
+		.arg("protocol.file.allow=always")
+		.arg("submodule")
+		.arg("--quiet")
+		.arg("update")
+		.arg("--init")
+		.status()
+	);
+	assert!(result.success(), "git submodule update --init: {result}");
 
 	let_assert!(Ok(result) = std::process::Command::new("cargo")
 		.current_dir(&tempdir)
@@ -48,7 +76,7 @@ fn test_in_external_clone() {
 		.arg(&(lib_dir))
 		.status()
 	);
-	assert!(result.success(), "cargo test: {result}");
+	assert!(result.success(), "cargo add: {result}");
 
 	let_assert!(Ok(result) = std::process::Command::new("cargo")
 		.current_dir(&tempdir)
