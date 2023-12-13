@@ -4,7 +4,9 @@ jobs:
   stable:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Build
       run: cargo +stable build --verbose
     - name: Run tests
@@ -14,7 +16,9 @@ jobs:
     steps:
     - name: Install Rust nightly
       run: rustup install nightly
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Build
       run: cargo +nightly build --verbose
     - name: Run tests
