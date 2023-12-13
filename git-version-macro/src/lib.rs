@@ -171,7 +171,7 @@ fn git_version_impl(args: Args) -> syn::Result<TokenStream2> {
 	let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
 		.ok_or_else(|| error!("CARGO_MANIFEST_DIR is not set"))?;
 
-	match describe(&manifest_dir, git_args) {
+	match describe(manifest_dir, git_args) {
 		Ok(version) => {
 			let dependencies = git_dependencies()?;
 			let prefix = args.prefix.iter();
